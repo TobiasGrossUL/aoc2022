@@ -1,106 +1,82 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
+use std::collections::HashSet;
 
-#[derive(Copy, Clone)]
-enum Hand {
-    Rock,
-    Paper,
-    Scissors
-}
-
-enum Outcome {
-    Win,
-    Draw, Loose
+fn map_item(item: &char) -> i32 {
+    let value = item.clone() as u32;
+    if value < 91 {
+        return (value - 64 + 26) as i32;
+    } else {
+        return (value - 96) as i32;
+    }
 }
 
 fn main() {
     let all_data = parse_data();
-    let mut total_points1 = 0;
-    let mut total_points2= 0;
-    for data in all_data {
-       total_points1 += points1(data.0, data.1);
-       total_points2 += points2(data.0, data.2);
+    let mut sum = 0;
+    for rucksack in all_data {
+        let double_item = rucksack.0.intersection(&rucksack.1).collect::<Vec<&char>>()[0];
+        let value = map_item(double_item);
+        sum += value;
     }
-    println!("Solution Part 1: {}", total_points1);
-    println!("Solution Part 2: {}", total_points2);
-}
+    println!("Solution first part: {}", sum);
 
-fn get_win_hand(oponent: Hand) -> Hand {
-    return match oponent {
-        Hand::Rock => Hand::Paper,
-        Hand::Paper => Hand::Scissors,
-        Hand::Scissors => Hand::Rock,
+
+    let all_data = parse_data();
+    let mut sum = 0;
+    let mut secret_badge1: HashSet<&char> = HashSet::new();
+    let mut secret_badge2: HashSet<&char> = HashSet::new();
+    let mut secret_badge3: HashSet<&char> = HashSet::new();
+    for (i, rucksack) in all_data.iter().enumerate() {
+        let phase = i % 3;
+        match phase {
+            0 => {
+                secret_badge1.extend(&rucksack.0);
+                secret_badge1.extend(&rucksack.1);
+            },
+            1 => {
+                secret_badge2.extend(&rucksack.0);
+                secret_badge2.extend(&rucksack.1);
+            },
+            2 => {
+                secret_badge3.extend(&rucksack.0);
+                secret_badge3.extend(&rucksack.1);
+
+                // let first_intersetctiojkksecret_badge1.intersection(&secret_badge2).copied.collect::<HashSet<&&char>>().intersection(&secret_badge3);
+                let first: HashSet<&char> = secret_badge1.intersection(&secret_badge2).copied().collect();
+                let first: Vec<&char> = first.intersection(&secret_badge3).copied().collect();
+                secret_badge1.clear();
+                secret_badge2.clear();
+                secret_badge3.clear();
+                let value = map_item(first[0]);
+                sum += value;
+            },
+            _ => {
+                println!{"Error"};
+            }
+        }
     }
+    println!("Solution second part: {}", sum);
 }
 
-fn get_loose_hand(oponent: Hand) -> Hand {
-    match oponent {
-        Hand::Rock => Hand::Scissors,
-        Hand::Paper => Hand::Rock,
-        Hand::Scissors => Hand::Paper,
-    }
-}
-
-fn points2(oponent: Hand, myself: Outcome) -> i32 {
-    let play = match myself {
-        Outcome::Loose => get_loose_hand(oponent),
-        Outcome::Win => get_win_hand(oponent),
-        Outcome::Draw => oponent.clone(),
-    };
-    return points1(oponent, play);
-}
-
-fn points1(oponent: Hand, myself: Hand) -> i32 {
-    let shape_points = match myself {
-        Hand::Rock => 1,
-        Hand::Paper => 2,
-        Hand::Scissors => 3,
-    };
-
-    let outcome = match (oponent, myself) {
-        (Hand::Rock, Hand::Scissors) => 0,
-        (Hand::Rock, Hand::Paper) => 6,
-        (Hand::Scissors, Hand::Paper) => 0,
-        (Hand::Scissors, Hand::Rock) => 6,
-        (Hand::Paper, Hand::Rock) => 0,
-        (Hand::Paper, Hand::Scissors) => 6,
-        (_, _) => 3,
-    };
-    return shape_points + outcome;
-}
-
-fn get_hand(element: &str) -> Option<Hand> {
-    match element {
-        "A" => Some(Hand::Rock),
-        "B" => Some(Hand::Paper),
-        "C" => Some(Hand::Scissors),
-        "X" => Some(Hand::Rock),
-        "Y" => Some(Hand::Paper),
-        "Z" => Some(Hand::Scissors),
-        _ => None,
-    }
-}
-
-fn get_outcome(element: &str) -> Option<Outcome> {
-    match element {
-        "X" => Some(Outcome::Loose),
-        "Y" => Some(Outcome::Draw),
-        "Z" => Some(Outcome::Win),
-        _ => None,
-    }
-}
-
-fn parse_data() -> Vec<(Hand, Hand, Outcome)> {
+fn parse_data() -> Vec<(HashSet<char>, HashSet<char>)> {
     let mut result = Vec::new();
     let lines = read_lines("input").unwrap();
     for line in lines {
         if let Ok(linedata) = line {
-            let elements: Vec<&str> = linedata.split(" ").collect();
-            let oponent = get_hand(elements[0]).unwrap();
-            let myself = get_hand(elements[1]).unwrap();
-            let outcome = get_outcome(elements[1]).unwrap();
-            result.push((oponent, myself, outcome));
+            let chars: Vec<char> = linedata.chars().collect();
+            let half = chars.len() /2;
+            let mut comp1 = HashSet::new();
+            let mut comp2 = HashSet::new();
+            for (i, x) in chars.iter().enumerate() {
+                if i < half {
+                    comp1.insert(x.clone());
+                } else {
+                    comp2.insert(x.clone());
+                }
+            }
+            result.push((comp1, comp2));
         }
     }
     return result;
