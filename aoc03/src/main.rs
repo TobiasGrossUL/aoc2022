@@ -12,7 +12,7 @@ fn map_item(item: &char) -> i32 {
     }
 }
 
-fn main() {
+fn part_one() -> i32 {
     let all_data = parse_data();
     let mut sum = 0;
     for rucksack in all_data {
@@ -20,43 +20,46 @@ fn main() {
         let value = map_item(double_item);
         sum += value;
     }
-    println!("Solution first part: {}", sum);
+    return sum;
+}
 
+fn merge_set<'a>(set1: &'a HashSet<char>, set2: &'a HashSet<char>) -> HashSet<&'a char>{
+    let mut target: HashSet<&char> = HashSet::new();
+    target.extend(set1);
+    target.extend(set2);
+    return target;
+}
 
-    let all_data = parse_data();
-    let mut sum = 0;
-    let mut secret_badge1: HashSet<&char> = HashSet::new();
-    let mut secret_badge2: HashSet<&char> = HashSet::new();
-    let mut secret_badge3: HashSet<&char> = HashSet::new();
-    for (i, rucksack) in all_data.iter().enumerate() {
-        let phase = i % 3;
-        match phase {
-            0 => {
-                secret_badge1.extend(&rucksack.0);
-                secret_badge1.extend(&rucksack.1);
-            },
-            1 => {
-                secret_badge2.extend(&rucksack.0);
-                secret_badge2.extend(&rucksack.1);
-            },
-            2 => {
-                secret_badge3.extend(&rucksack.0);
-                secret_badge3.extend(&rucksack.1);
-
-                // let first_intersetctiojkksecret_badge1.intersection(&secret_badge2).copied.collect::<HashSet<&&char>>().intersection(&secret_badge3);
-                let first: HashSet<&char> = secret_badge1.intersection(&secret_badge2).copied().collect();
-                let first: Vec<&char> = first.intersection(&secret_badge3).copied().collect();
-                secret_badge1.clear();
-                secret_badge2.clear();
-                secret_badge3.clear();
-                let value = map_item(first[0]);
-                sum += value;
-            },
-            _ => {
-                println!{"Error"};
-            }
+fn intersect<'a>(sets: &'a [HashSet<&char>]) -> HashSet<&'a char> {
+    let mut result: HashSet<&char> = HashSet::new();
+    for (i, set) in sets.iter().enumerate() {
+        if i == 0 {
+            result.extend(set);
+        } else {
+            result = result.intersection(set).copied().collect();
         }
     }
+    return result;
+}
+
+fn part_two() -> i32 {
+    let all_data = parse_data();
+    let mut sum = 0;
+    let no_comps : Vec<HashSet<&char>> = all_data.iter().map(|rucksack| {merge_set(&rucksack.0, &rucksack.1)}).collect();
+    for group in no_comps.chunks(3) {
+        let value: Vec<&char> = intersect(group).iter().copied().collect();
+        assert!(value.len() == 1);
+        let value = map_item(value[0]);
+        sum += value;
+    }
+    return sum;
+}
+
+fn main() {
+    let sum = part_one();
+    println!("Solution first part: {}", sum);
+
+    let sum = part_two();
     println!("Solution second part: {}", sum);
 }
 
