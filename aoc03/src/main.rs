@@ -3,12 +3,11 @@ use std::io::{self, BufRead};
 use std::path::Path;
 use std::collections::HashSet;
 
-fn map_item(item: &char) -> i32 {
-    let value = item.clone() as u32;
-    if value < 91 {
-        return (value - 64 + 26) as i32;
+fn map_item(item: char) -> i32 {
+    if item.is_uppercase() {
+        return ((item as u32) - ('A' as u32) + 27) as i32;
     } else {
-        return (value - 96) as i32;
+        return ((item as u32) - ('a' as u32) + 1) as i32;
     }
 }
 
@@ -16,8 +15,8 @@ fn part_one() -> i32 {
     let all_data = parse_data();
     let mut sum = 0;
     for rucksack in all_data {
-        let double_item = rucksack.0.intersection(&rucksack.1).collect::<Vec<&char>>()[0];
-        let value = map_item(double_item);
+        let double_item = rucksack.0.intersection(&rucksack.1).into_iter().next().unwrap();
+        let value = map_item(*double_item);
         sum += value;
     }
     return sum;
@@ -30,7 +29,7 @@ fn merge_set<'a>(set1: &'a HashSet<char>, set2: &'a HashSet<char>) -> HashSet<&'
     return target;
 }
 
-fn intersect<'a>(sets: &'a [HashSet<&char>]) -> HashSet<&'a char> {
+fn intersect<'a>(sets: &'a [HashSet<&char>]) -> char {
     let mut result: HashSet<&char> = HashSet::new();
     for (i, set) in sets.iter().enumerate() {
         if i == 0 {
@@ -39,7 +38,7 @@ fn intersect<'a>(sets: &'a [HashSet<&char>]) -> HashSet<&'a char> {
             result = result.intersection(set).copied().collect();
         }
     }
-    return result;
+    return **result.iter().next().unwrap();
 }
 
 fn part_two() -> i32 {
@@ -47,9 +46,8 @@ fn part_two() -> i32 {
     let mut sum = 0;
     let no_comps : Vec<HashSet<&char>> = all_data.iter().map(|rucksack| {merge_set(&rucksack.0, &rucksack.1)}).collect();
     for group in no_comps.chunks(3) {
-        let value: Vec<&char> = intersect(group).iter().copied().collect();
-        assert!(value.len() == 1);
-        let value = map_item(value[0]);
+        let value = intersect(group);
+        let value = map_item(value);
         sum += value;
     }
     return sum;
@@ -70,16 +68,11 @@ fn parse_data() -> Vec<(HashSet<char>, HashSet<char>)> {
         if let Ok(linedata) = line {
             let chars: Vec<char> = linedata.chars().collect();
             let half = chars.len() /2;
-            let mut comp1 = HashSet::new();
-            let mut comp2 = HashSet::new();
-            for (i, x) in chars.iter().enumerate() {
-                if i < half {
-                    comp1.insert(x.clone());
-                } else {
-                    comp2.insert(x.clone());
-                }
-            }
-            result.push((comp1, comp2));
+            let compartment1 = &chars[..half];
+            let compartment2 = &chars[half..];
+            let compartment1 = HashSet::from_iter(compartment1.iter().cloned());
+            let compartment2 = HashSet::from_iter(compartment2.iter().cloned());
+            result.push((compartment1, compartment2));
         }
     }
     return result;
