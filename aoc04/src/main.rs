@@ -3,20 +3,23 @@ use std::io::{self, BufRead};
 use std::path::Path;
 use std::collections::HashSet;
 
-fn check_fully_contains(first_elve: &HashSet<i32>, second_elve: &HashSet<i32>) -> bool {
+type CampSpace = HashSet<i32>;
+type ElveTeam = (CampSpace, CampSpace);
+
+fn check_fully_contains(first_elve: &CampSpace, second_elve: &CampSpace) -> bool {
     return first_elve.is_subset(second_elve) || second_elve.is_subset(first_elve);
 }
 
-fn check_overlaps(first_elve: &HashSet<i32>, second_elve: &HashSet<i32>) -> bool {
+fn check_overlaps(first_elve: &CampSpace, second_elve: &CampSpace) -> bool {
     return !first_elve.is_disjoint(second_elve);
 }
 
-fn part_one(camp_sections: &Vec<(HashSet<i32>, HashSet<i32>)>) -> usize {
+fn part_one(camp_sections: &Vec<ElveTeam>) -> usize {
     let fully_overlapping = camp_sections.iter().filter(|team| {check_fully_contains(&team.0, &team.1)}).count();
     return fully_overlapping;
 }
 
-fn part_two(camp_sections: &Vec<(HashSet<i32>, HashSet<i32>)>) -> usize {
+fn part_two(camp_sections: &Vec<ElveTeam>) -> usize {
     let partially_overlapping = camp_sections.iter().filter(|team| {check_overlaps(&team.0, &team.1)}).count();
     return partially_overlapping;
 }
@@ -30,16 +33,16 @@ fn main() {
     println!("Solution second part: {}", sum);
 }
 
-fn make_elve_space(data_repr: &str) -> HashSet<i32> {
+fn make_elve_space(data_repr: &str) -> CampSpace {
     let elve_space: Vec<&str> = data_repr.split("-").collect();
     let first = elve_space[0].parse::<i32>().unwrap();
     let last = elve_space[1].parse::<i32>().unwrap();
     let elve_space = first..=last;
-    let elve_space: HashSet<i32> = HashSet::from_iter(elve_space);
+    let elve_space: CampSpace = HashSet::from_iter(elve_space);
     return elve_space;
 }
 
-fn parse_camp_sections() -> Vec<(HashSet<i32>, HashSet<i32>)> {
+fn parse_camp_sections() -> Vec<ElveTeam> {
     let mut result = Vec::new();
     let lines = read_lines("input").unwrap();
     for line in lines {
