@@ -3,58 +3,98 @@ use std::io::{self, BufRead};
 use std::path::Path;
 use std::collections::HashSet;
 
-type CampSpace = HashSet<i32>;
-type ElveTeam = (CampSpace, CampSpace);
-
-fn check_fully_contains(first_elve: &CampSpace, second_elve: &CampSpace) -> bool {
-    return first_elve.is_subset(second_elve) || second_elve.is_subset(first_elve);
+fn part_one(stacks: &Vec<Stack>, commands: &Vec<Command>) -> String {
+    let mut stacks = stacks.clone();
+    for command in commands {
+        for _ in 0..command.0 {
+            let element = stacks[command.1].pop().unwrap();
+            stacks[command.2].push(element);
+        }
+    }
+    let result = stacks.iter().map(|stack| stack.last().unwrap()).collect();
+    return result;
 }
 
-fn check_overlaps(first_elve: &CampSpace, second_elve: &CampSpace) -> bool {
-    return !first_elve.is_disjoint(second_elve);
-}
-
-fn part_one(camp_sections: &Vec<ElveTeam>) -> usize {
-    let fully_overlapping = camp_sections.iter().filter(|team| {check_fully_contains(&team.0, &team.1)}).count();
-    return fully_overlapping;
-}
-
-fn part_two(camp_sections: &Vec<ElveTeam>) -> usize {
-    let partially_overlapping = camp_sections.iter().filter(|team| {check_overlaps(&team.0, &team.1)}).count();
-    return partially_overlapping;
+fn part_two(stacks: &Vec<Stack>, commands: &Vec<Command>) -> String {
+    let mut stacks = stacks.clone();
+    for command in commands {
+        let mut tmp: Stack = Vec::new();
+        for _ in 0..command.0 {
+            let element = stacks[command.1].pop().unwrap();
+            tmp.push(element);
+        }
+        tmp.reverse();
+        for element in tmp {
+            stacks[command.2].push(element);
+        }
+    }
+    let result = stacks.iter().map(|stack| stack.last().unwrap()).collect();
+    return result;
 }
 
 fn main() {
-    let camp_sections = parse_camp_sections();
-    let sum = part_one(&camp_sections);
-    println!("Solution first part: {}", sum);
+    let (stacks, commands)  = parse_input();
 
-    let sum = part_two(&camp_sections);
-    println!("Solution second part: {}", sum);
+    let sol1 = part_one(&stacks, &commands);
+    println!("Solution part 1: {}", sol1);
+
+    let sol2 = part_two(&stacks, &commands);
+    println!("Solution part 2: {}", sol2);
 }
 
-fn make_elve_space(data_repr: &str) -> CampSpace {
-    let elve_space: Vec<&str> = data_repr.split("-").collect();
-    let first = elve_space[0].parse::<i32>().unwrap();
-    let last = elve_space[1].parse::<i32>().unwrap();
-    let elve_space = first..=last;
-    let elve_space: CampSpace = HashSet::from_iter(elve_space);
-    return elve_space;
+enum ParseMode {
+    Stacks,
+    Commands,
 }
 
-fn parse_camp_sections() -> Vec<ElveTeam> {
-    let mut result = Vec::new();
-    let lines = read_lines("input").unwrap();
-    for line in lines {
-        if let Ok(team_data) = line {
-            let elves: Vec<&str> = team_data.split(",").collect();
-            assert!(elves.len() == 2);
-            let first_space = make_elve_space(elves[0]);
-            let second_space = make_elve_space(elves[1]);
-            result.push((first_space, second_space));
+type Command = (i32, usize, usize);
+type StackElement = char;
+type Stack = Vec<StackElement>;
+
+fn parse_stacks(stacks: &mut Vec<Stack>, line: &str) {
+    let elements: Vec<char> = line.chars().collect();
+    for index in 0..9 {
+        let char_index = (index * 4) + 1;
+        let element = elements[char_index];
+        if element == '1' {
+            break;
+        }
+        if element != ' ' {
+            stacks[index].insert(0, element);
         }
     }
-    return result;
+}
+
+fn parse_command(commands: &mut Vec<Command>, line: &str) {
+    let mut tokens = line.split(' ');
+    tokens.next();
+    let amount = tokens.next().unwrap().parse::<i32>().unwrap();
+    tokens.next();
+    let source = tokens.next().unwrap().parse::<usize>().unwrap() - 1;
+    tokens.next();
+    let target = tokens.next().unwrap().parse::<usize>().unwrap() - 1;
+    commands.push((amount, source, target));
+}
+
+fn parse_input() -> (Vec<Stack>, Vec<Command>) {
+    let mut stacks = vec![Vec::new(); 9];
+    let mut commands = Vec::new();
+    let lines = read_lines("input").unwrap();
+    let mut mode = ParseMode::Stacks;
+
+    for line in lines {
+        if let Ok(linedata) = line {
+            if linedata == "" {
+                mode = ParseMode::Commands;
+                continue;
+            }
+            match mode {
+                ParseMode::Stacks => parse_stacks(&mut stacks, &linedata),
+                ParseMode::Commands => parse_command(&mut commands, &linedata)
+            }
+        }
+    }
+    return (stacks, commands);
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
