@@ -1,35 +1,30 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
-use std::collections::HashSet;
 
 fn part_one(stacks: &Vec<Stack>, commands: &Vec<Command>) -> String {
     let mut stacks = stacks.clone();
     for command in commands {
-        for _ in 0..command.0 {
-            let element = stacks[command.1].pop().unwrap();
-            stacks[command.2].push(element);
+        for _ in 0..command.amount {
+            let element = stacks[command.src].pop().unwrap();
+            stacks[command.dest].push(element);
         }
     }
-    let result = stacks.iter().map(|stack| stack.last().unwrap()).collect();
-    return result;
+    return stacks.iter().map(|stack| stack.last().unwrap()).collect();
 }
 
 fn part_two(stacks: &Vec<Stack>, commands: &Vec<Command>) -> String {
     let mut stacks = stacks.clone();
     for command in commands {
-        let mut tmp: Stack = Vec::new();
-        for _ in 0..command.0 {
-            let element = stacks[command.1].pop().unwrap();
-            tmp.push(element);
+        let mut crane: Stack = Vec::new();
+        for _ in 0..command.amount {
+            let element = stacks[command.src].pop().unwrap();
+            crane.push(element);
         }
-        tmp.reverse();
-        for element in tmp {
-            stacks[command.2].push(element);
-        }
+        crane.reverse();
+        stacks[command.dest].append(&mut crane);
     }
-    let result = stacks.iter().map(|stack| stack.last().unwrap()).collect();
-    return result;
+    return stacks.iter().map(|stack| stack.last().unwrap()).collect();
 }
 
 fn main() {
@@ -47,42 +42,48 @@ enum ParseMode {
     Commands,
 }
 
-type Command = (i32, usize, usize);
+struct Command {
+    amount: i32,
+    src: usize,
+    dest: usize
+}
+
 type StackElement = char;
 type Stack = Vec<StackElement>;
 
 fn parse_stacks(stacks: &mut Vec<Stack>, line: &str) {
-    let elements: Vec<char> = line.chars().collect();
-    for index in 0..9 {
-        let char_index = (index * 4) + 1;
-        let element = elements[char_index];
-        if element == '1' {
-            break;
+    if line.contains('1') {
+        return;
+    }
+
+    for (index, element) in line.chars().enumerate() {
+        if !element.is_alphabetic() {
+            continue;
         }
-        if element != ' ' {
-            stacks[index].insert(0, element);
-        }
+        let stack_index = (index - 1) / 4;
+        stacks[stack_index].insert(0, element);
     }
 }
 
 fn parse_command(commands: &mut Vec<Command>, line: &str) {
-    let mut tokens = line.split(' ');
-    tokens.next();
-    let amount = tokens.next().unwrap().parse::<i32>().unwrap();
-    tokens.next();
-    let source = tokens.next().unwrap().parse::<usize>().unwrap() - 1;
-    tokens.next();
-    let target = tokens.next().unwrap().parse::<usize>().unwrap() - 1;
-    commands.push((amount, source, target));
+    let mut command = Command {amount:0, src:0, dest:0};
+    for (index, token) in line.split(' ').enumerate() {
+        match index {
+            1 => command.amount = token.parse::<i32>().unwrap(),
+            3 => command.src = token.parse::<usize>().unwrap() - 1,
+            5 => command.dest = token.parse::<usize>().unwrap() - 1,
+            _ => ()
+        }
+    }
+    commands.push(command);
 }
 
 fn parse_input() -> (Vec<Stack>, Vec<Command>) {
     let mut stacks = vec![Vec::new(); 9];
     let mut commands = Vec::new();
-    let lines = read_lines("input").unwrap();
     let mut mode = ParseMode::Stacks;
 
-    for line in lines {
+    for line in read_lines("input").unwrap() {
         if let Ok(linedata) = line {
             if linedata == "" {
                 mode = ParseMode::Commands;
