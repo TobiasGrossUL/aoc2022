@@ -2,18 +2,27 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 
-fn visible_direction(line_of_sight: &[u8], height: u8) -> bool {
+fn is_visible_in_direction(line_of_sight: &[u8], height: u8) -> bool {
     let bigger_tree = line_of_sight.iter().filter(|tree| tree >= &&height);
     return bigger_tree.count() == 0;
 }
 
-fn amount_direction(line_of_sight: &[u8], height: u8) -> usize {
-    for (i, tree) in line_of_sight.iter().enumerate() {
-        if tree >= &height {
-            return i + 1;
+fn _amount_visible_direction<'a, I: Iterator<Item=&'a u8>>(line_of_sight: I, height: &'a u8) -> Option<usize> {
+        for (i, tree) in line_of_sight.enumerate() {
+            if tree >= &height {
+                return Some(i + 1);
+            }
         }
+    return None;
+}
+
+fn amount_visible_direction(line_of_sight: &[u8], height: u8, reverse: bool) -> usize {
+    let all = line_of_sight.len();
+    if reverse {
+        return _amount_visible_direction(line_of_sight.iter().rev(), &height).unwrap_or(all);
+    } else {
+        return _amount_visible_direction(line_of_sight.iter(), &height).unwrap_or(all);
     }
-    return line_of_sight.len();
 }
 
 fn create_columns(forest: &Vec<Trees>) -> Vec<Trees> {
@@ -31,31 +40,21 @@ fn create_columns(forest: &Vec<Trees>) -> Vec<Trees> {
 fn part_one(forest: &Vec<Trees>) -> usize {
     let mut amount = forest.len() * 2 + (forest[0].len()-2) * 2;
     let columns = create_columns(forest);
-    //println!("{:?}", forest);
-    //println!("{:?}", columns);
     for line_index in 1..forest.len()-1 {
         for column_index in 1..forest[line_index].len()-1 {
-            //println!("{}, {}", line_index, column_index);
             let height = forest[line_index][column_index];
-            //println!("Height: {}", height);
             let mut visible = false;
             let west_view = &forest[line_index][..column_index];
             let east_view = &forest[line_index][column_index+1..];
             let north_view = &columns[column_index][..line_index];
             let south_view = &columns[column_index][line_index+1..];
-            //println!("West View: {:?}", west_view);
-            //println!("East View: {:?}", east_view);
-            //println!("North View: {:?}", north_view);
-            //println!("South View: {:?}", south_view);
-            visible = visible || visible_direction(west_view, height);
-            visible = visible || visible_direction(east_view, height);
-            visible = visible || visible_direction(north_view, height);
-            visible = visible || visible_direction(south_view, height);
+            visible = visible || is_visible_in_direction(west_view, height);
+            visible = visible || is_visible_in_direction(east_view, height);
+            visible = visible || is_visible_in_direction(north_view, height);
+            visible = visible || is_visible_in_direction(south_view, height);
             if visible {
-                //println!("Visible");
                 amount += 1;
             }
-                //println!("=====================");
         }
     }
     return amount;
@@ -64,34 +63,17 @@ fn part_one(forest: &Vec<Trees>) -> usize {
 fn part_two(forest: &Vec<Trees>) -> usize {
     let mut max_score = 0;
     let columns = create_columns(forest);
-    //println!("{:?}", forest);
-    //println!("{:?}", columns);
     for line_index in 1..forest.len()-1 {
         for column_index in 1..forest[line_index].len()-1 {
-            //println!("{}, {}", line_index, column_index);
             let height = forest[line_index][column_index];
-            //println!("Height: {}", height);
-            let mut west_view: Vec<u8> = forest[line_index][..column_index].iter().cloned().collect();
-            west_view.reverse();
-            let east_view = &forest[line_index][column_index+1..];
-            let mut north_view: Vec<u8> = columns[column_index][..line_index].iter().cloned().collect();
-            north_view.reverse();
-            let south_view = &columns[column_index][line_index+1..];
-            //println!("West View: {:?}", west_view);
-            //println!("East View: {:?}", east_view);
-            //println!("North View: {:?}", north_view);
-            //println!("South View: {:?}", south_view);
-            //visible = visible || visible_direction(west_view, height);
-            let score_west = amount_direction(&west_view, height);
-            let score_east = amount_direction(&east_view, height);
-            let score_north = amount_direction(&north_view, height);
-            let score_south = amount_direction(&south_view, height);
+            let score_west = amount_visible_direction(&forest[line_index][..column_index], height, true);
+            let score_east = amount_visible_direction(&forest[line_index][column_index+1..], height, false);
+            let score_north = amount_visible_direction(&columns[column_index][..line_index], height, true);
+            let score_south = amount_visible_direction(&columns[column_index][line_index+1..], height, false);
             let total_score = score_east * score_north * score_south * score_west;
             if total_score > max_score {
-                //println!("Visible");
                 max_score = total_score;
             }
-                //println!("=====================");
         }
     }
     return max_score;
@@ -136,16 +118,16 @@ mod tests {
 
     #[test]
     fn part1_output() {
-        let input = parse_input().unwrap();
-        let position = find_marker(&input, 4).unwrap();
-        assert_eq!(1210, position);
+        let input = parse_input();
+        let amount_visible = part_one(&input);
+        assert_eq!(1851, amount_visible);
     }
 
     #[test]
     fn part2_output() {
-        let input = parse_input().unwrap();
-        let position = find_marker(&input, 14).unwrap();
-        assert_eq!(3476, position);
+        let input = parse_input();
+        let score = part_two(&input);
+        assert_eq!(574080, score);
     }
 
 }
