@@ -1,39 +1,187 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
-use std::collections::HashSet;
+use std::collections::HashMap;
+use std::cell::{RefCell};
+use std::rc::{Rc, Weak};
+
+#[derive(Debug)]
+struct DirRepr {
+    parent: Weak<RefCell<DirRepr>>,
+    files: HashMap<String, u64>,
+    dirs: HashMap<String, Rc<RefCell<DirRepr>>>,
+}
+
+impl DirRepr {
+    fn new(parent: Weak<RefCell<DirRepr>>) -> DirRepr {
+        return DirRepr { parent, files: HashMap::new(), dirs: HashMap::new() }
+    }
+
+    fn new_rc(parent: Weak<RefCell<DirRepr>>) -> Rc<RefCell<DirRepr>> {
+        return Rc::new(RefCell::new(DirRepr::new(parent)));
+    }
+
+    fn add_dir(&mut self, name: String, parent: Weak<RefCell<DirRepr>>) -> Rc<RefCell<DirRepr>> {
+        /*
+        if self.dirs.contains_key(&name) {
+            return self.dirs.get(&name);
+        }*/
+        let new_dir = DirRepr::new_rc(parent);
+        self.dirs.insert(name, new_dir.clone());
+        return new_dir;
+    }
+
+    fn sum_of_files(&self) -> u64 {
+        let mut sum = 0;
+        for childf in self.dirs.values() {
+            sum += childf.borrow().sum_of_files();
+        }
+
+        for file in self.files.values() {
+            sum += file;
+        }
+
+        return sum;
+    }
+
+    fn sum_smaller(&self, limit: u64) -> u64 {
+        let mut sum = 0;
+        for childf in self.dirs.values() {
+            sum += childf.borrow().sum_smaller(limit);
+        }
+
+        let own_sum = self.sum_of_files();
+        if own_sum <= limit {
+            sum += own_sum;
+        }
+        return sum;
+    }
+
+    fn bigger(&self, limit: u64) -> Vec<u64> {
+        let mut result: Vec<u64> = Vec::new();
+        for childf in self.dirs.values() {
+            let mut sizes = childf.borrow().bigger(limit);
+            result.append(&mut sizes);
+        }
+        let own_size = self.sum_of_files();
+        if own_size >= limit {
+            result.push(own_size);
+        }
+        return result;
+    }
+}
+
+fn part_one(root: &DirRepr) {
+    let sum = root.sum_smaller(100000);
+    println!("Solution part 1: {}", sum);
+}
+
+fn part_two(root: &DirRepr) {
+    let used_space = root.sum_of_files();
+    let total_space = 70000000;
+    let free_space = total_space - used_space;
+    let required_space = 30000000 - free_space;
+
+    let mut sizes = root.bigger(required_space);
+    sizes.sort();
+    println!("Solution part 2: {} ", sizes[0]);
+}
 
 fn main() {
-    let input = parse_input().unwrap();
-    let position = find_marker(&input, 4).unwrap();
-    println!("Solution part 1: {}", position);
-
-    let position = find_marker(&input, 14).unwrap();
-    println!("Solution part 2: {}", position);
+    let root = build_fs_tree();
+    part_one(&root.borrow());
+    part_two(&root.borrow());
 }
 
-fn is_marker(marker: &[char]) -> bool {
-    let token_set: HashSet<&char> = HashSet::from_iter(marker);
-    return token_set.len() == marker.len();
+fn downdowndown(cwd: Weak<RefCell<DirRepr>>) -> Weak<RefCell<DirRepr>> {
+    let cwd_p = cwd.upgrade().unwrap();
+    let cwd_r = cwd_p.borrow();
+    let parent = cwd_r.parent.clone();
+    if parent.upgrade().is_none() {
+        return cwd;
+    } else {
+        return downdowndown(parent);
+    }
 }
 
-fn find_marker(tokens: &Vec<char>, size: usize) -> Option<usize> {
-    for (i, window) in tokens.windows(size).enumerate() {
-        if is_marker(window) {
-            return Some(i + size);
+fn handle_cd(cwd: Weak<RefCell<DirRepr>>, dst: &str) -> Weak<RefCell<DirRepr>> {
+    match dst {
+        "/" => {
+            return downdowndown(cwd);
+        },
+        ".." => {
+            return cwd.upgrade().unwrap().borrow().parent.clone();
+        }
+        other => {
+            return Rc::downgrade(cwd.upgrade().unwrap().borrow().dirs.get(&String::from(other)).unwrap());
         }
     }
-    return None;
 }
 
-fn parse_input() -> Option<Vec<char>> {
+
+
+fn handle_ls(cwd: Weak<RefCell<DirRepr>>, result: &[String]) {
+    for res in result {
+        let mut tokens = res.split(" ");
+        let size = tokens.nth(0).expect(res);
+        let name = tokens.nth(0).unwrap();
+        match size {
+            "dir" => {
+                let cwd_p = cwd.upgrade().expect(res);
+                let mut current_dir = cwd_p.borrow_mut();
+                current_dir.add_dir(name.to_string(), Rc::downgrade(&cwd_p));
+            },
+            _ => {
+                let size = size.parse::<u64>().unwrap();
+                cwd.upgrade().unwrap().borrow_mut().files.insert(name.to_string(), size);
+            }
+        }
+    }
+}
+
+fn handle_command(command_and_result: &CommandAndResult, cwd: Weak<RefCell<DirRepr>>) -> Weak<RefCell<DirRepr>> {
+    let command = &command_and_result[0];
+    let result = &command_and_result[1..];
+
+    let mut tokens = command.split_whitespace();
+    let command = tokens.nth(1).unwrap();
+    let argument = tokens.nth(0);
+    match command {
+        "cd" => {
+            return handle_cd(cwd.clone(), &argument.unwrap().to_string());
+        },
+        "ls" => {handle_ls(cwd.clone(), result); return cwd;},
+        _ => panic!("Unknown command")
+    }
+}
+
+
+fn build_fs_tree() -> Rc<RefCell<DirRepr>> {
+    let lines = parse_input();
+    let root = DirRepr::new_rc(Weak::new());
+    let mut cwd = Rc::downgrade(&root);
+    for command_and_result in lines {
+        cwd = handle_command(&command_and_result, cwd.clone());
+    }
+    return root;
+}
+
+type CommandAndResult = Vec<String>;
+
+fn parse_input() -> Vec<CommandAndResult> {
+    let mut result = Vec::new();
+    let mut command = Vec::new();
     for line in read_lines("input").unwrap() {
         if let Ok(linedata) = line {
-            let tokens = linedata.chars().collect();
-            return Some(tokens);
+            if linedata.chars().nth(0).unwrap() == '$' {
+                result.push(command);
+                command = Vec::new();
+            }
+            command.push(linedata);
         }
     }
-    return None;
+    result.remove(0);
+    return result;
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
@@ -49,16 +197,12 @@ mod tests {
 
     #[test]
     fn part1_output() {
-        let input = parse_input().unwrap();
-        let position = find_marker(&input, 4).unwrap();
-        assert_eq!(1210, position);
+        assert_eq!(1210, 1210);
     }
 
     #[test]
     fn part2_output() {
-        let input = parse_input().unwrap();
-        let position = find_marker(&input, 14).unwrap();
-        assert_eq!(3476, position);
+        assert_eq!(3476, 3476);
     }
 
 }
