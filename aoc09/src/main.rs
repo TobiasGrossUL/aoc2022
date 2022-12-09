@@ -3,6 +3,7 @@ use std::io::{self, BufRead};
 use std::path::Path;
 use std::collections::HashSet;
 
+#[derive(Clone)]
 struct Coordinate {
     x: i32,
     y: i32
@@ -29,69 +30,109 @@ impl Coordinate {
 }
 
 struct Rope {
-    head: Coordinate,
-    tail: Coordinate,
+    knots: Vec<Coordinate>,
     tail_positions: HashSet<(i32, i32)>
 }
 
 impl Rope {
-    fn new() -> Rope {
-        let head = Coordinate::new(0,0);
-        let tail = Coordinate::new(0,0);
+    fn new(knot_count: usize) -> Rope {
+        let knots = vec![Coordinate::new(0,0); knot_count];
         let tail_positions = HashSet::new();
-        Rope {head, tail, tail_positions}
+        Rope {knots, tail_positions}
     }
 
     fn _move_head(&mut self, com: &Command) {
         match com {
-            Command::Up(_) => self.head.change_y(1),
-            Command::Down(_) => self.head.change_y(-1),
-            Command::Right(_) => self.head.change_x(1),
-            Command::Left(_) => self.head.change_x(-1)
+            Command::Up(_) => self.knots[0].change_y(1),
+            Command::Down(_) => self.knots[0].change_y(-1),
+            Command::Right(_) => self.knots[0].change_x(1),
+            Command::Left(_) => self.knots[0].change_x(-1)
         }
     }
 
     fn _move_tail(&mut self) {
-        let distance = self.head.diff(&self.tail);
-        match distance {
-            (2, 0) => self.tail.change_x(-1),
-            (-2, 0) => self.tail.change_x(1),
-            (0, 2) => self.tail.change_y(-1),
-            (0, -2) => self.tail.change_y(1),
-            (2, 1) => {
-                self.tail.change_x(-1);
-                self.tail.change_y(-1);
-            },
-            (2, -1) => {
-                self.tail.change_x(-1);
-                self.tail.change_y(1);
-            },
-            (-2, 1) => {
-                self.tail.change_x(1);
-                self.tail.change_y(-1);
-            },
-            (-2, -1) => {
-                self.tail.change_x(1);
-                self.tail.change_y(1);
-            },
-            (1, 2) => {
-                self.tail.change_x(-1);
-                self.tail.change_y(-1);
-            },
-            (-1, 2) => {
-                self.tail.change_x(1);
-                self.tail.change_y(-1);
-            },
-            (1, -2) => {
-                self.tail.change_x(-1);
-                self.tail.change_y(1);
-            },
-            (-1, -2) => {
-                self.tail.change_x(1);
-                self.tail.change_y(1);
-            },
-            _ => ()
+        let indeces: Vec<usize> = (0..self.knots.len()).collect();
+        for indeces in indeces.windows(2) {
+            //self.visualize(10, 10, "int");
+            let head = self.knots[indeces[0]].clone();
+            let distance = head.diff(&self.knots[indeces[1]]);
+            let tail = &mut self.knots[indeces[1]];
+            match distance {
+                (2, 0) => tail.change_x(-1),
+                (-2, 0) => tail.change_x(1),
+                (0, 2) => tail.change_y(-1),
+                (0, -2) =>tail.change_y(1),
+                (2, 1) => {
+                    tail.change_x(-1);
+                    tail.change_y(-1);
+                },
+                (2, -1) => {
+                    tail.change_x(-1);
+                    tail.change_y(1);
+                },
+                (-2, 1) => {
+                    tail.change_x(1);
+                    tail.change_y(-1);
+                },
+                (-2, -1) => {
+                    tail.change_x(1);
+                    tail.change_y(1);
+                },
+                (1, 2) => {
+                    tail.change_x(-1);
+                    tail.change_y(-1);
+                },
+                (-1, 2) => {
+                    tail.change_x(1);
+                    tail.change_y(-1);
+                },
+                (1, -2) => {
+                    tail.change_x(-1);
+                    tail.change_y(1);
+                },
+                (-1, -2) => {
+                    tail.change_x(1);
+                    tail.change_y(1);
+                },
+                (2, 2) => {
+                    tail.change_x(-1);
+                    tail.change_y(-1);
+                }
+                (2, -2) => {
+                    tail.change_x(-1);
+                    tail.change_y(1);
+                }
+                (-2, 2) => {
+                    tail.change_x(1);
+                    tail.change_y(-1);
+                }
+                (-2, -2) => {
+                    tail.change_x(1);
+                    tail.change_y(1);
+                }
+                _ => ()
+            }
         }
+    }
+
+    fn visualize(&self, height: usize, width: usize, command: &str) {
+        println!("====={}", command);
+        let mut points = vec![vec![String::from("."); width]; height];
+        for (i, knot) in self.knots.iter().enumerate().rev() {
+            let token;
+            if i == 0 {
+                token = String::from("H");
+            } else {
+                token = (i).to_string();
+            }
+
+            points[knot.y as usize][knot.x as usize] = token;
+        }
+        for line in points.iter().rev() {
+            let aline = line.join("");
+            println!("{}", aline);
+        }
+        println!("");
     }
 
     fn exec_command(&mut self, com: &Command) {
@@ -107,7 +148,7 @@ impl Rope {
         for _ in 0..times {
             self._move_head(com);
             self._move_tail();
-            self.tail_positions.insert((self.tail.x, self.tail.y));
+            self.tail_positions.insert((self.knots.last().unwrap().x, self.knots.last().unwrap().y));
         }
     }
 
@@ -119,15 +160,35 @@ impl Rope {
 fn main() {
     let commands = parse_input();
     part_one(&commands);
+    part_two(&commands);
+    //test();
+}
+
+fn test() {
+    let mut rope = Rope::new(10);
+    rope.exec_command(&Command::Right(5));
+    rope.visualize(10, 10, "R5");
+
+    rope.exec_command(&Command::Up(8));
+    rope.visualize(10, 10, "U8");
 }
 
 fn part_one(commands: &Vec<Command>) {
-    let mut rope = Rope::new();
+    let mut rope = Rope::new(2);
     for command in commands {
         rope.exec_command(command);
     }
     let postitions = rope.get_amount_tail_positions();
     println!("Solution part 1 {}", postitions);
+}
+
+fn part_two(commands: &Vec<Command>) {
+    let mut rope = Rope::new(10);
+    for command in commands {
+        rope.exec_command(command);
+    }
+    let postitions = rope.get_amount_tail_positions();
+    println!("Solution part 2 {}", postitions);
 }
 
 enum Command {
@@ -171,23 +232,51 @@ mod tests {
 
     #[test]
     fn head_up() {
-        let mut rope = Rope::new();
+        let mut rope = Rope::new(2);
         rope.exec_command(&Command::Up(1));
-        assert_eq!(1, rope.head.y);
-        assert_eq!(0, rope.head.x);
-        assert_eq!(0, rope.tail.y);
-        assert_eq!(0, rope.tail.x);
+        assert_eq!(1, rope.knots[0].y);
+        assert_eq!(0, rope.knots[0].x);
+        assert_eq!(0, rope.knots[1].y);
+        assert_eq!(0, rope.knots[1].x);
 
         rope.exec_command(&Command::Up(1));
-        assert_eq!(2, rope.head.y);
-        assert_eq!(0, rope.head.x);
-        assert_eq!(1, rope.tail.y);
-        assert_eq!(0, rope.tail.x);
+        assert_eq!(2, rope.knots[0].y);
+        assert_eq!(0, rope.knots[0].x);
+        assert_eq!(1, rope.knots[1].y);
+        assert_eq!(0, rope.knots[1].x);
 
         rope.exec_command(&Command::Up(2));
-        assert_eq!(4, rope.head.y);
-        assert_eq!(0, rope.head.x);
-        assert_eq!(3, rope.tail.y);
-        assert_eq!(0, rope.tail.x);
+        assert_eq!(4, rope.knots[0].y);
+        assert_eq!(0, rope.knots[0].x);
+        assert_eq!(3, rope.knots[1].y);
+        assert_eq!(0, rope.knots[1].x);
+    }
+
+    #[test]
+    fn head_up_2() {
+        let mut rope = Rope::new(3);
+        rope.exec_command(&Command::Up(1));
+        assert_eq!(1, rope.knots[0].y);
+        assert_eq!(0, rope.knots[0].x);
+        assert_eq!(0, rope.knots[1].y);
+        assert_eq!(0, rope.knots[1].x);
+        assert_eq!(0, rope.knots[2].y);
+        assert_eq!(0, rope.knots[2].x);
+
+        rope.exec_command(&Command::Up(1));
+        assert_eq!(2, rope.knots[0].y);
+        assert_eq!(0, rope.knots[0].x);
+        assert_eq!(1, rope.knots[1].y);
+        assert_eq!(0, rope.knots[1].x);
+        assert_eq!(0, rope.knots[2].y);
+        assert_eq!(0, rope.knots[2].x);
+
+        rope.exec_command(&Command::Up(2));
+        assert_eq!(4, rope.knots[0].y);
+        assert_eq!(0, rope.knots[0].x);
+        assert_eq!(3, rope.knots[1].y);
+        assert_eq!(0, rope.knots[1].x);
+        assert_eq!(2, rope.knots[2].y);
+        assert_eq!(0, rope.knots[2].x);
     }
 }
