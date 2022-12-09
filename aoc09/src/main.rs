@@ -1,105 +1,158 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
+use std::collections::HashSet;
 
-fn is_visible_in_direction(line_of_sight: &[u8], height: u8) -> bool {
-    let bigger_tree = line_of_sight.iter().filter(|tree| tree >= &&height);
-    return bigger_tree.count() == 0;
+struct Coordinate {
+    x: i32,
+    y: i32
 }
 
-fn _amount_visible_direction<'a, I: Iterator<Item=&'a u8>>(line_of_sight: I, height: &'a u8) -> Option<usize> {
-        for (i, tree) in line_of_sight.enumerate() {
-            if tree >= &height {
-                return Some(i + 1);
-            }
-        }
-    return None;
-}
+impl Coordinate {
+    fn new(x: i32, y: i32) -> Coordinate {
+        Coordinate { x, y }
+    }
 
-fn amount_visible_direction(line_of_sight: &[u8], height: u8, reverse: bool) -> usize {
-    let all = line_of_sight.len();
-    if reverse {
-        return _amount_visible_direction(line_of_sight.iter().rev(), &height).unwrap_or(all);
-    } else {
-        return _amount_visible_direction(line_of_sight.iter(), &height).unwrap_or(all);
+    fn change_x(&mut self, x: i32) {
+        self.x += x;
+    }
+
+    fn change_y(&mut self, y: i32) {
+        self.y += y;
+    }
+
+    fn diff(&self, other: &Coordinate) -> (i32, i32) {
+        let x_diff = other.x - self.x;
+        let y_diff = other.y - self.y;
+        return (x_diff, y_diff);
     }
 }
 
-fn create_columns(forest: &Vec<Trees>) -> Vec<Trees> {
-    let mut columns = Vec::new();
-    for y in 0..forest[0].len() {
-        let mut colum = Vec::new();
-        for x in 0..forest.len() {
-            colum.push(forest[x][y]);
-        }
-        columns.push(colum);
-    }
-    return columns;
+struct Rope {
+    head: Coordinate,
+    tail: Coordinate,
+    tail_positions: HashSet<(i32, i32)>
 }
 
-fn part_one(forest: &Vec<Trees>) -> usize {
-    let mut amount = forest.len() * 2 + (forest[0].len()-2) * 2;
-    let columns = create_columns(forest);
-    for line_index in 1..forest.len()-1 {
-        for column_index in 1..forest[line_index].len()-1 {
-            let height = forest[line_index][column_index];
-            let mut visible = false;
-            let west_view = &forest[line_index][..column_index];
-            let east_view = &forest[line_index][column_index+1..];
-            let north_view = &columns[column_index][..line_index];
-            let south_view = &columns[column_index][line_index+1..];
-            visible = visible || is_visible_in_direction(west_view, height);
-            visible = visible || is_visible_in_direction(east_view, height);
-            visible = visible || is_visible_in_direction(north_view, height);
-            visible = visible || is_visible_in_direction(south_view, height);
-            if visible {
-                amount += 1;
-            }
-        }
+impl Rope {
+    fn new() -> Rope {
+        let head = Coordinate::new(0,0);
+        let tail = Coordinate::new(0,0);
+        let tail_positions = HashSet::new();
+        Rope {head, tail, tail_positions}
     }
-    return amount;
-}
 
-fn part_two(forest: &Vec<Trees>) -> usize {
-    let mut max_score = 0;
-    let columns = create_columns(forest);
-    for line_index in 1..forest.len()-1 {
-        for column_index in 1..forest[line_index].len()-1 {
-            let height = forest[line_index][column_index];
-            let score_west = amount_visible_direction(&forest[line_index][..column_index], height, true);
-            let score_east = amount_visible_direction(&forest[line_index][column_index+1..], height, false);
-            let score_north = amount_visible_direction(&columns[column_index][..line_index], height, true);
-            let score_south = amount_visible_direction(&columns[column_index][line_index+1..], height, false);
-            let total_score = score_east * score_north * score_south * score_west;
-            if total_score > max_score {
-                max_score = total_score;
-            }
+    fn _move_head(&mut self, com: &Command) {
+        match com {
+            Command::Up(_) => self.head.change_y(1),
+            Command::Down(_) => self.head.change_y(-1),
+            Command::Right(_) => self.head.change_x(1),
+            Command::Left(_) => self.head.change_x(-1)
         }
     }
-    return max_score;
+
+    fn _move_tail(&mut self) {
+        let distance = self.head.diff(&self.tail);
+        match distance {
+            (2, 0) => self.tail.change_x(-1),
+            (-2, 0) => self.tail.change_x(1),
+            (0, 2) => self.tail.change_y(-1),
+            (0, -2) => self.tail.change_y(1),
+            (2, 1) => {
+                self.tail.change_x(-1);
+                self.tail.change_y(-1);
+            },
+            (2, -1) => {
+                self.tail.change_x(-1);
+                self.tail.change_y(1);
+            },
+            (-2, 1) => {
+                self.tail.change_x(1);
+                self.tail.change_y(-1);
+            },
+            (-2, -1) => {
+                self.tail.change_x(1);
+                self.tail.change_y(1);
+            },
+            (1, 2) => {
+                self.tail.change_x(-1);
+                self.tail.change_y(-1);
+            },
+            (-1, 2) => {
+                self.tail.change_x(1);
+                self.tail.change_y(-1);
+            },
+            (1, -2) => {
+                self.tail.change_x(-1);
+                self.tail.change_y(1);
+            },
+            (-1, -2) => {
+                self.tail.change_x(1);
+                self.tail.change_y(1);
+            },
+            _ => ()
+        }
+    }
+
+    fn exec_command(&mut self, com: &Command) {
+        match com {
+            Command::Up(len) => self._exec_command(com, *len),
+            Command::Down(len) => self._exec_command(com, *len),
+            Command::Left(len) => self._exec_command(com, *len),
+            Command::Right(len) => self._exec_command(com, *len)
+        }
+    }
+
+    fn _exec_command(&mut self, com: &Command, times:i32) {
+        for _ in 0..times {
+            self._move_head(com);
+            self._move_tail();
+            self.tail_positions.insert((self.tail.x, self.tail.y));
+        }
+    }
+
+    fn get_amount_tail_positions(&self) -> usize {
+        return self.tail_positions.len();
+    }
 }
 
 fn main() {
-    let forest = parse_input();
-    let sol_part_one = part_one(&forest);
-    println!{"Solution part 1: {}", sol_part_one};
-    let sol_part_two = part_two(&forest);
-    println!{"Solution part 2: {}", sol_part_two};
+    let commands = parse_input();
+    part_one(&commands);
+}
+
+fn part_one(commands: &Vec<Command>) {
+    let mut rope = Rope::new();
+    for command in commands {
+        rope.exec_command(command);
+    }
+    let postitions = rope.get_amount_tail_positions();
+    println!("Solution part 1 {}", postitions);
+}
+
+enum Command {
+    Up(i32),
+    Down(i32),
+    Right(i32),
+    Left(i32)
 }
 
 
-type Trees = Vec<u8>;
-
-fn parse_input() -> Vec<Trees> {
+fn parse_input() -> Vec<Command> {
     let mut result = Vec::new();
     for line in read_lines("input").unwrap() {
         if let Ok(linedata) = line {
-            let mut treeline = Vec::new();
-            for tree in linedata.chars() {
-                let tree = tree.to_string().parse::<u8>().unwrap();
-                treeline.push(tree);
-            }
-            result.push(treeline);
+            let mut tokens = linedata.split_whitespace();
+            let direction = tokens.nth(0).unwrap();
+            let length = tokens.nth(0).unwrap().parse::<i32>().unwrap();
+            let command = match direction {
+                "L" => Command::Left(length),
+                "R" => Command::Right(length),
+                "U" => Command::Up(length),
+                "D" => Command::Down(length),
+                _ => panic!("Unknown command")
+            };
+            result.push(command);
         }
     }
     return result;
@@ -117,17 +170,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn part1_output() {
-        let input = parse_input();
-        let amount_visible = part_one(&input);
-        assert_eq!(1851, amount_visible);
-    }
+    fn head_up() {
+        let mut rope = Rope::new();
+        rope.exec_command(&Command::Up(1));
+        assert_eq!(1, rope.head.y);
+        assert_eq!(0, rope.head.x);
+        assert_eq!(0, rope.tail.y);
+        assert_eq!(0, rope.tail.x);
 
-    #[test]
-    fn part2_output() {
-        let input = parse_input();
-        let score = part_two(&input);
-        assert_eq!(574080, score);
-    }
+        rope.exec_command(&Command::Up(1));
+        assert_eq!(2, rope.head.y);
+        assert_eq!(0, rope.head.x);
+        assert_eq!(1, rope.tail.y);
+        assert_eq!(0, rope.tail.x);
 
+        rope.exec_command(&Command::Up(2));
+        assert_eq!(4, rope.head.y);
+        assert_eq!(0, rope.head.x);
+        assert_eq!(3, rope.tail.y);
+        assert_eq!(0, rope.tail.x);
+    }
 }
