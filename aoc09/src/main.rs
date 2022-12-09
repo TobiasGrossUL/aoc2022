@@ -14,11 +14,11 @@ impl Coordinate {
         Coordinate { x, y }
     }
 
-    fn change_x(&mut self, x: i32) {
+    fn translate_x(&mut self, x: i32) {
         self.x += x;
     }
 
-    fn change_y(&mut self, y: i32) {
+    fn translate_y(&mut self, y: i32) {
         self.y += y;
     }
 
@@ -43,79 +43,78 @@ impl Rope {
 
     fn _move_head(&mut self, com: &Command) {
         match com {
-            Command::Up(_) => self.knots[0].change_y(1),
-            Command::Down(_) => self.knots[0].change_y(-1),
-            Command::Right(_) => self.knots[0].change_x(1),
-            Command::Left(_) => self.knots[0].change_x(-1)
+            Command::Up(_) => self.knots[0].translate_y(1),
+            Command::Down(_) => self.knots[0].translate_y(-1),
+            Command::Right(_) => self.knots[0].translate_x(1),
+            Command::Left(_) => self.knots[0].translate_x(-1)
         }
     }
 
-    fn _move_tail(&mut self) {
+    fn _move_tails(&mut self) {
         let indeces: Vec<usize> = (0..self.knots.len()).collect();
         for indeces in indeces.windows(2) {
-            //self.visualize(10, 10, "int");
             let head = self.knots[indeces[0]].clone();
             let distance = head.diff(&self.knots[indeces[1]]);
             let tail = &mut self.knots[indeces[1]];
             match distance {
-                (2, 0) => tail.change_x(-1),
-                (-2, 0) => tail.change_x(1),
-                (0, 2) => tail.change_y(-1),
-                (0, -2) =>tail.change_y(1),
+                (2, 0) => tail.translate_x(-1),
+                (-2, 0) => tail.translate_x(1),
+                (0, 2) => tail.translate_y(-1),
+                (0, -2) =>tail.translate_y(1),
                 (2, 1) => {
-                    tail.change_x(-1);
-                    tail.change_y(-1);
+                    tail.translate_x(-1);
+                    tail.translate_y(-1);
                 },
                 (2, -1) => {
-                    tail.change_x(-1);
-                    tail.change_y(1);
+                    tail.translate_x(-1);
+                    tail.translate_y(1);
                 },
                 (-2, 1) => {
-                    tail.change_x(1);
-                    tail.change_y(-1);
+                    tail.translate_x(1);
+                    tail.translate_y(-1);
                 },
                 (-2, -1) => {
-                    tail.change_x(1);
-                    tail.change_y(1);
+                    tail.translate_x(1);
+                    tail.translate_y(1);
                 },
                 (1, 2) => {
-                    tail.change_x(-1);
-                    tail.change_y(-1);
+                    tail.translate_x(-1);
+                    tail.translate_y(-1);
                 },
                 (-1, 2) => {
-                    tail.change_x(1);
-                    tail.change_y(-1);
+                    tail.translate_x(1);
+                    tail.translate_y(-1);
                 },
                 (1, -2) => {
-                    tail.change_x(-1);
-                    tail.change_y(1);
+                    tail.translate_x(-1);
+                    tail.translate_y(1);
                 },
                 (-1, -2) => {
-                    tail.change_x(1);
-                    tail.change_y(1);
+                    tail.translate_x(1);
+                    tail.translate_y(1);
                 },
                 (2, 2) => {
-                    tail.change_x(-1);
-                    tail.change_y(-1);
+                    tail.translate_x(-1);
+                    tail.translate_y(-1);
                 }
                 (2, -2) => {
-                    tail.change_x(-1);
-                    tail.change_y(1);
+                    tail.translate_x(-1);
+                    tail.translate_y(1);
                 }
                 (-2, 2) => {
-                    tail.change_x(1);
-                    tail.change_y(-1);
+                    tail.translate_x(1);
+                    tail.translate_y(-1);
                 }
                 (-2, -2) => {
-                    tail.change_x(1);
-                    tail.change_y(1);
+                    tail.translate_x(1);
+                    tail.translate_y(1);
                 }
                 _ => ()
             }
         }
     }
 
-    fn visualize(&self, height: usize, width: usize, command: &str) {
+    fn draw(&self, height: usize, width: usize, command: &str) {
         println!("====={}", command);
         let mut points = vec![vec![String::from("."); width]; height];
         for (i, knot) in self.knots.iter().enumerate().rev() {
@@ -147,7 +146,7 @@ impl Rope {
     fn _exec_command(&mut self, com: &Command, times:i32) {
         for _ in 0..times {
             self._move_head(com);
-            self._move_tail();
+            self._move_tails();
             self.tail_positions.insert((self.knots.last().unwrap().x, self.knots.last().unwrap().y));
         }
     }
@@ -161,34 +160,26 @@ fn main() {
     let commands = parse_input();
     part_one(&commands);
     part_two(&commands);
-    //test();
 }
 
-fn test() {
-    let mut rope = Rope::new(10);
-    rope.exec_command(&Command::Right(5));
-    rope.visualize(10, 10, "R5");
-
-    rope.exec_command(&Command::Up(8));
-    rope.visualize(10, 10, "U8");
-}
-
-fn part_one(commands: &Vec<Command>) {
+fn part_one(commands: &Vec<Command>) -> usize {
     let mut rope = Rope::new(2);
     for command in commands {
         rope.exec_command(command);
     }
-    let postitions = rope.get_amount_tail_positions();
-    println!("Solution part 1 {}", postitions);
+    let positions = rope.get_amount_tail_positions();
+    println!("Solution part 1 {}", positions);
+    return positions;
 }
 
-fn part_two(commands: &Vec<Command>) {
+fn part_two(commands: &Vec<Command>) -> usize {
     let mut rope = Rope::new(10);
     for command in commands {
         rope.exec_command(command);
     }
-    let postitions = rope.get_amount_tail_positions();
-    println!("Solution part 2 {}", postitions);
+    let positions = rope.get_amount_tail_positions();
+    println!("Solution part 2 {}", positions);
+    return positions;
 }
 
 enum Command {
@@ -197,7 +188,6 @@ enum Command {
     Right(i32),
     Left(i32)
 }
-
 
 fn parse_input() -> Vec<Command> {
     let mut result = Vec::new();
@@ -278,5 +268,19 @@ mod tests {
         assert_eq!(0, rope.knots[1].x);
         assert_eq!(2, rope.knots[2].y);
         assert_eq!(0, rope.knots[2].x);
+    }
+
+    #[test]
+    fn part1() {
+        let commands = parse_input();
+        let solution = part_one(&commands);
+        assert_eq!(solution, 6236);
+    }
+
+    #[test]
+    fn part2() {
+        let commands = parse_input();
+        let solution = part_two(&commands);
+        assert_eq!(solution, 2449);
     }
 }
