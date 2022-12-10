@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 use std::collections::HashMap;
-use std::cell::{RefCell};
+use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
 #[derive(Debug)]
@@ -22,10 +22,6 @@ impl DirRepr {
     }
 
     fn add_dir(&mut self, name: String, parent: Weak<RefCell<DirRepr>>) -> Rc<RefCell<DirRepr>> {
-        /*
-        if self.dirs.contains_key(&name) {
-            return self.dirs.get(&name);
-        }*/
         let new_dir = DirRepr::new_rc(parent);
         self.dirs.insert(name, new_dir.clone());
         return new_dir;
@@ -33,28 +29,19 @@ impl DirRepr {
 
     fn sum_of_files(&self) -> u64 {
         let mut sum = 0;
-        for childf in self.dirs.values() {
-            sum += childf.borrow().sum_of_files();
-        }
-
-        for file in self.files.values() {
-            sum += file;
-        }
-
+        sum += self.dirs.values().map(|f| f.borrow().sum_of_files()).sum::<u64>();
+        sum += self.files.values().sum::<u64>();
         return sum;
     }
 
     fn sum_smaller(&self, limit: u64) -> u64 {
-        let mut sum = 0;
-        for childf in self.dirs.values() {
-            sum += childf.borrow().sum_smaller(limit);
-        }
-
+        let child_sum = self.dirs.values().map(|f| f.borrow().sum_smaller(limit)).sum::<u64>();
         let own_sum = self.sum_of_files();
         if own_sum <= limit {
-            sum += own_sum;
+            return child_sum + own_sum;
+        } else {
+            return child_sum;
         }
-        return sum;
     }
 
     fn bigger(&self, limit: u64) -> Vec<u64> {
@@ -71,12 +58,13 @@ impl DirRepr {
     }
 }
 
-fn part_one(root: &DirRepr) {
+fn part_one(root: &DirRepr) -> u64 {
     let sum = root.sum_smaller(100000);
     println!("Solution part 1: {}", sum);
+    return sum;
 }
 
-fn part_two(root: &DirRepr) {
+fn part_two(root: &DirRepr) -> u64 {
     let used_space = root.sum_of_files();
     let total_space = 70000000;
     let free_space = total_space - used_space;
@@ -85,6 +73,7 @@ fn part_two(root: &DirRepr) {
     let mut sizes = root.bigger(required_space);
     sizes.sort();
     println!("Solution part 2: {} ", sizes[0]);
+    return sizes[0];
 }
 
 fn main() {
@@ -93,21 +82,21 @@ fn main() {
     part_two(&root.borrow());
 }
 
-fn downdowndown(cwd: Weak<RefCell<DirRepr>>) -> Weak<RefCell<DirRepr>> {
+fn to_root(cwd: Weak<RefCell<DirRepr>>) -> Weak<RefCell<DirRepr>> {
     let cwd_p = cwd.upgrade().unwrap();
     let cwd_r = cwd_p.borrow();
     let parent = cwd_r.parent.clone();
     if parent.upgrade().is_none() {
         return cwd;
     } else {
-        return downdowndown(parent);
+        return to_root(parent);
     }
 }
 
 fn handle_cd(cwd: Weak<RefCell<DirRepr>>, dst: &str) -> Weak<RefCell<DirRepr>> {
     match dst {
         "/" => {
-            return downdowndown(cwd);
+            return to_root(cwd);
         },
         ".." => {
             return cwd.upgrade().unwrap().borrow().parent.clone();
@@ -197,12 +186,16 @@ mod tests {
 
     #[test]
     fn part1_output() {
-        assert_eq!(1210, 1210);
+        let root = build_fs_tree();
+        let solution = part_one(&root.borrow());
+        assert_eq!(solution, 1232307);
     }
 
     #[test]
     fn part2_output() {
-        assert_eq!(3476, 3476);
+        let root = build_fs_tree();
+        let solution = part_two(&root.borrow());
+        assert_eq!(solution, 7268994);
     }
 
 }
