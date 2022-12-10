@@ -1,206 +1,143 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
-use std::collections::HashSet;
 
-#[derive(Clone)]
-struct Coordinate {
-    x: i32,
-    y: i32
+struct CPU {
+    reg_x: i32,
+    cycle: i32,
+    command_stack: Vec<Command>,
+    blocked: i32,
+    current_command: Option<Command>,
+    pixels: Vec<char>,
 }
 
-impl Coordinate {
-    fn new(x: i32, y: i32) -> Coordinate {
-        Coordinate { x, y }
+impl CPU {
+    fn new(commands: Vec<Command>) -> CPU {
+        let pixels: Vec<char> = vec!{'.'; (6 * 40) as usize};
+        CPU {cycle: 1, reg_x: 1, command_stack: commands, blocked: 0, current_command: None, pixels}
     }
 
-    fn translate_x(&mut self, x: i32) {
-        self.x += x;
+    fn execute_current_comannd(&mut self) {
+        let the_command = self.current_command.as_ref().unwrap();
+        match the_command {
+            Command::Addx(amount) => self.reg_x += amount,
+            _ => ()
+        }
+        self.current_command = None;
     }
 
-    fn translate_y(&mut self, y: i32) {
-        self.y += y;
-    }
-
-    fn diff(&self, other: &Coordinate) -> (i32, i32) {
-        let x_diff = other.x - self.x;
-        let y_diff = other.y - self.y;
-        return (x_diff, y_diff);
-    }
-}
-
-struct Rope {
-    knots: Vec<Coordinate>,
-    tail_positions: HashSet<(i32, i32)>
-}
-
-impl Rope {
-    fn new(knot_count: usize) -> Rope {
-        let knots = vec![Coordinate::new(0,0); knot_count];
-        let tail_positions = HashSet::new();
-        Rope {knots, tail_positions}
-    }
-
-    fn _move_head(&mut self, com: &Command) {
-        match com {
-            Command::Up(_) => self.knots[0].translate_y(1),
-            Command::Down(_) => self.knots[0].translate_y(-1),
-            Command::Right(_) => self.knots[0].translate_x(1),
-            Command::Left(_) => self.knots[0].translate_x(-1)
+    fn _draw(&mut self) {
+        let index = self.cycle -1;
+        let compare = index % 40;
+        if compare >= self.reg_x - 1 && compare <= self.reg_x + 1 {
+            self.pixels[index as usize] = '#';
         }
     }
 
-    fn _move_tails(&mut self) {
-        let indeces: Vec<usize> = (0..self.knots.len()).collect();
-        for indeces in indeces.windows(2) {
-            let head = self.knots[indeces[0]].clone();
-            let distance = head.diff(&self.knots[indeces[1]]);
-            let tail = &mut self.knots[indeces[1]];
-            match distance {
-                (2, 0) => tail.translate_x(-1),
-                (-2, 0) => tail.translate_x(1),
-                (0, 2) => tail.translate_y(-1),
-                (0, -2) =>tail.translate_y(1),
-                (2, 1) => {
-                    tail.translate_x(-1);
-                    tail.translate_y(-1);
-                },
-                (2, -1) => {
-                    tail.translate_x(-1);
-                    tail.translate_y(1);
-                },
-                (-2, 1) => {
-                    tail.translate_x(1);
-                    tail.translate_y(-1);
-                },
-                (-2, -1) => {
-                    tail.translate_x(1);
-                    tail.translate_y(1);
-                },
-                (1, 2) => {
-                    tail.translate_x(-1);
-                    tail.translate_y(-1);
-                },
-                (-1, 2) => {
-                    tail.translate_x(1);
-                    tail.translate_y(-1);
-                },
-                (1, -2) => {
-                    tail.translate_x(-1);
-                    tail.translate_y(1);
-                },
-                (-1, -2) => {
-                    tail.translate_x(1);
-                    tail.translate_y(1);
-                },
-                (2, 2) => {
-                    tail.translate_x(-1);
-                    tail.translate_y(-1);
-                }
-                (2, -2) => {
-                    tail.translate_x(-1);
-                    tail.translate_y(1);
-                }
-                (-2, 2) => {
-                    tail.translate_x(1);
-                    tail.translate_y(-1);
-                }
-                (-2, -2) => {
-                    tail.translate_x(1);
-                    tail.translate_y(1);
-                }
-                _ => ()
+    fn draw(&self) {
+        for line in self.pixels.chunks(40) {
+            let tmp: Vec<char> = line.iter().cloned().collect();
+            let stringline: String = tmp.into_iter().collect();
+            println!("{}", stringline);
+        }
+    }
+
+    fn execute_next_command(&mut self) {
+        let next_cmd = self.command_stack.remove(0);
+        match next_cmd {
+            Command::Addx(_) => {
+                self.current_command = Some(next_cmd);
+                self.blocked = 1;
+            },
+            Command::Noop() => ()
+        };
+        self.cycle += 1;
+    }
+
+    fn do_cycle (&mut self) -> (i32, i32) {
+        self._draw();
+        if self.blocked > 0 {
+            self.blocked -= 1;
+            self.cycle += 1;
+            if self.blocked == 0 {
+                self.execute_current_comannd();
             }
+            return (self.reg_x, self.cycle);
+        } else {
+            self.execute_next_command();
         }
-    }
 
-    fn draw(&self, height: usize, width: usize, command: &str) {
-        println!("====={}", command);
-        let mut points = vec![vec![String::from("."); width]; height];
-        for (i, knot) in self.knots.iter().enumerate().rev() {
-            let token;
-            if i == 0 {
-                token = String::from("H");
-            } else {
-                token = (i).to_string();
-            }
-
-            points[knot.y as usize][knot.x as usize] = token;
-        }
-        for line in points.iter().rev() {
-            let aline = line.join("");
-            println!("{}", aline);
-        }
-        println!("");
-    }
-
-    fn exec_command(&mut self, com: &Command) {
-        match com {
-            Command::Up(len) => self._exec_command(com, *len),
-            Command::Down(len) => self._exec_command(com, *len),
-            Command::Left(len) => self._exec_command(com, *len),
-            Command::Right(len) => self._exec_command(com, *len)
-        }
-    }
-
-    fn _exec_command(&mut self, com: &Command, times:i32) {
-        for _ in 0..times {
-            self._move_head(com);
-            self._move_tails();
-            self.tail_positions.insert((self.knots.last().unwrap().x, self.knots.last().unwrap().y));
-        }
-    }
-
-    fn get_amount_tail_positions(&self) -> usize {
-        return self.tail_positions.len();
+        return (self.reg_x, self.cycle);
     }
 }
 
 fn main() {
-    let commands = parse_input();
-    part_one(&commands);
-    part_two(&commands);
+    part_one();
+    part_two();
 }
 
-fn part_one(commands: &Vec<Command>) -> usize {
-    let mut rope = Rope::new(2);
-    for command in commands {
-        rope.exec_command(command);
+fn part_one() -> i32 {
+    let commands = parse_input("input");
+    let mut cpu = CPU::new(commands);
+    let mut sum = 0;
+    for _ in 1..20 {
+        cpu.do_cycle();
     }
-    let positions = rope.get_amount_tail_positions();
-    println!("Solution part 1 {}", positions);
-    return positions;
+    sum = sum + cpu.cycle * cpu.reg_x;
+
+    for _ in 0..40 {
+        cpu.do_cycle();
+    }
+    sum = sum + cpu.cycle * cpu.reg_x;
+
+    for _ in 0..40 {
+        cpu.do_cycle();
+    }
+    sum = sum + cpu.cycle * cpu.reg_x;
+
+    for _ in 0..40 {
+        cpu.do_cycle();
+    }
+    sum = sum + cpu.cycle * cpu.reg_x;
+
+    for _ in 0..40 {
+        cpu.do_cycle();
+    }
+    sum = sum + cpu.cycle * cpu.reg_x;
+
+    for _ in 0..40 {
+        cpu.do_cycle();
+    }
+    sum = sum + cpu.cycle * cpu.reg_x;
+    println!("Solution part1: {}", sum);
+
+    return sum;
 }
 
-fn part_two(commands: &Vec<Command>) -> usize {
-    let mut rope = Rope::new(10);
-    for command in commands {
-        rope.exec_command(command);
+fn part_two() {
+    let commands = parse_input("input");
+    let mut cpu = CPU::new(commands);
+    for _ in 1..240 {
+        cpu.do_cycle();
     }
-    let positions = rope.get_amount_tail_positions();
-    println!("Solution part 2 {}", positions);
-    return positions;
+    cpu.draw();
 }
 
 enum Command {
-    Up(i32),
-    Down(i32),
-    Right(i32),
-    Left(i32)
+    Noop(),
+    Addx(i32)
 }
 
-fn parse_input() -> Vec<Command> {
+fn parse_input(filename: &str) -> Vec<Command> {
     let mut result = Vec::new();
-    for line in read_lines("input").unwrap() {
+    for line in read_lines(filename).unwrap() {
         if let Ok(linedata) = line {
             let mut tokens = linedata.split_whitespace();
-            let direction = tokens.nth(0).unwrap();
-            let length = tokens.nth(0).unwrap().parse::<i32>().unwrap();
-            let command = match direction {
-                "L" => Command::Left(length),
-                "R" => Command::Right(length),
-                "U" => Command::Up(length),
-                "D" => Command::Down(length),
+            let command_type = tokens.nth(0).unwrap();
+            let parameter = tokens.nth(0);
+            let command = match command_type {
+                "addx" => Command::Addx(parameter.unwrap().parse::<i32>().unwrap()),
+                "noop" => Command::Noop(),
                 _ => panic!("Unknown command")
             };
             result.push(command);
@@ -221,66 +158,76 @@ mod tests {
     use super::*;
 
     #[test]
-    fn head_up() {
-        let mut rope = Rope::new(2);
-        rope.exec_command(&Command::Up(1));
-        assert_eq!(1, rope.knots[0].y);
-        assert_eq!(0, rope.knots[0].x);
-        assert_eq!(0, rope.knots[1].y);
-        assert_eq!(0, rope.knots[1].x);
-
-        rope.exec_command(&Command::Up(1));
-        assert_eq!(2, rope.knots[0].y);
-        assert_eq!(0, rope.knots[0].x);
-        assert_eq!(1, rope.knots[1].y);
-        assert_eq!(0, rope.knots[1].x);
-
-        rope.exec_command(&Command::Up(2));
-        assert_eq!(4, rope.knots[0].y);
-        assert_eq!(0, rope.knots[0].x);
-        assert_eq!(3, rope.knots[1].y);
-        assert_eq!(0, rope.knots[1].x);
+    fn simple() {
+        let mut commands = Vec::new();
+        commands.push(Command::Noop());
+        commands.push(Command::Addx(3));
+        commands.push(Command::Addx(-5));
+        let mut cpu = CPU::new(commands);
+        let (reg, cycle) = cpu.do_cycle();
+        assert_eq!(cycle, 2);
+        assert_eq!(reg, 1);
+        let (reg, cycle) = cpu.do_cycle();
+        assert_eq!(cycle, 3);
+        assert_eq!(reg, 1);
+        let (reg, cycle) = cpu.do_cycle();
+        assert_eq!(cycle, 4);
+        assert_eq!(reg, 4);
+        let (reg, cycle) = cpu.do_cycle();
+        assert_eq!(cycle, 5);
+        assert_eq!(reg, 4);
+        let (reg, cycle) = cpu.do_cycle();
+        assert_eq!(cycle, 6);
+        assert_eq!(reg, -1);
     }
 
     #[test]
-    fn head_up_2() {
-        let mut rope = Rope::new(3);
-        rope.exec_command(&Command::Up(1));
-        assert_eq!(1, rope.knots[0].y);
-        assert_eq!(0, rope.knots[0].x);
-        assert_eq!(0, rope.knots[1].y);
-        assert_eq!(0, rope.knots[1].x);
-        assert_eq!(0, rope.knots[2].y);
-        assert_eq!(0, rope.knots[2].x);
+    fn complex() {
+        let commands = parse_input("test_input");
+        let mut cpu = CPU::new(commands);
+        let mut sum = 0;
+        for _ in 1..20 {
+            cpu.do_cycle();
+        }
+        sum = sum + cpu.cycle * cpu.reg_x;
+        assert_eq!(cpu.cycle, 20);
+        assert_eq!(cpu.reg_x, 21);
 
-        rope.exec_command(&Command::Up(1));
-        assert_eq!(2, rope.knots[0].y);
-        assert_eq!(0, rope.knots[0].x);
-        assert_eq!(1, rope.knots[1].y);
-        assert_eq!(0, rope.knots[1].x);
-        assert_eq!(0, rope.knots[2].y);
-        assert_eq!(0, rope.knots[2].x);
+        for _ in 0..40 {
+            cpu.do_cycle();
+        }
+        sum = sum + cpu.cycle * cpu.reg_x;
+        assert_eq!(cpu.cycle, 60);
+        assert_eq!(cpu.reg_x, 19);
 
-        rope.exec_command(&Command::Up(2));
-        assert_eq!(4, rope.knots[0].y);
-        assert_eq!(0, rope.knots[0].x);
-        assert_eq!(3, rope.knots[1].y);
-        assert_eq!(0, rope.knots[1].x);
-        assert_eq!(2, rope.knots[2].y);
-        assert_eq!(0, rope.knots[2].x);
-    }
+        for _ in 0..40 {
+            cpu.do_cycle();
+        }
+        sum = sum + cpu.cycle * cpu.reg_x;
+        assert_eq!(cpu.cycle, 100);
+        assert_eq!(cpu.reg_x, 18);
 
-    #[test]
-    fn part1() {
-        let commands = parse_input();
-        let solution = part_one(&commands);
-        assert_eq!(solution, 6236);
-    }
+        for _ in 0..40 {
+            cpu.do_cycle();
+        }
+        sum = sum + cpu.cycle * cpu.reg_x;
+        assert_eq!(cpu.cycle, 140);
+        assert_eq!(cpu.reg_x, 21);
 
-    #[test]
-    fn part2() {
-        let commands = parse_input();
-        let solution = part_two(&commands);
-        assert_eq!(solution, 2449);
+        for _ in 0..40 {
+            cpu.do_cycle();
+        }
+        sum = sum + cpu.cycle * cpu.reg_x;
+        assert_eq!(cpu.cycle, 180);
+        assert_eq!(cpu.reg_x, 16);
+
+        for _ in 0..40 {
+            cpu.do_cycle();
+        }
+        sum = sum + cpu.cycle * cpu.reg_x;
+        assert_eq!(cpu.cycle, 220);
+        assert_eq!(cpu.reg_x, 18);
+
+        assert_eq!(sum, 13140);
     }
 }
