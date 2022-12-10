@@ -6,67 +6,62 @@ struct CPU {
     reg_x: i32,
     cycle: i32,
     command_stack: Vec<Command>,
-    blocked: i32,
-    current_command: Option<Command>,
+    bussy: bool,
     pixels: Vec<char>,
 }
 
 impl CPU {
     fn new(commands: Vec<Command>) -> CPU {
         let pixels: Vec<char> = vec!{'.'; (6 * 40) as usize};
-        CPU {cycle: 1, reg_x: 1, command_stack: commands, blocked: 0, current_command: None, pixels}
+        CPU {cycle: 1, reg_x: 1, command_stack: commands, bussy: false, pixels}
     }
 
-    fn execute_current_comannd(&mut self) {
-        let the_command = self.current_command.as_ref().unwrap();
+    fn execute_add(&mut self) {
+        self.bussy = false;
+        let the_command = self.command_stack.remove(0);
         match the_command {
             Command::Addx(amount) => self.reg_x += amount,
-            _ => ()
+            _ => panic!("No add command")
         }
-        self.current_command = None;
     }
 
     fn _draw(&mut self) {
         let index = self.cycle -1;
-        let compare = index % 40;
-        if compare >= self.reg_x - 1 && compare <= self.reg_x + 1 {
+        let compareable_index = index % 40;
+        if compareable_index >= self.reg_x - 1 && compareable_index <= self.reg_x + 1 {
             self.pixels[index as usize] = '#';
         }
     }
 
     fn draw(&self) {
         for line in self.pixels.chunks(40) {
-            let tmp: Vec<char> = line.iter().cloned().collect();
-            let stringline: String = tmp.into_iter().collect();
+            let stringline: Vec<&char> = line.iter().collect();
+            let stringline: String = stringline.into_iter().collect();
             println!("{}", stringline);
         }
     }
 
     fn execute_next_command(&mut self) {
-        let next_cmd = self.command_stack.remove(0);
+        let next_cmd = &self.command_stack[0];
         match next_cmd {
             Command::Addx(_) => {
-                self.current_command = Some(next_cmd);
-                self.blocked = 1;
+                self.bussy = true;
             },
-            Command::Noop() => ()
+            Command::Noop() => {
+                self.command_stack.remove(0);
+            }
         };
-        self.cycle += 1;
     }
 
     fn do_cycle (&mut self) -> (i32, i32) {
         self._draw();
-        if self.blocked > 0 {
-            self.blocked -= 1;
-            self.cycle += 1;
-            if self.blocked == 0 {
-                self.execute_current_comannd();
-            }
-            return (self.reg_x, self.cycle);
+        if self.bussy {
+            self.execute_add();
         } else {
             self.execute_next_command();
         }
 
+        self.cycle += 1;
         return (self.reg_x, self.cycle);
     }
 }
@@ -85,30 +80,13 @@ fn part_one() -> i32 {
     }
     sum = sum + cpu.cycle * cpu.reg_x;
 
-    for _ in 0..40 {
-        cpu.do_cycle();
+    for _ in 0..5 {
+        for _ in 0..40 {
+            cpu.do_cycle();
+        }
+        sum = sum + cpu.cycle * cpu.reg_x;
     }
-    sum = sum + cpu.cycle * cpu.reg_x;
 
-    for _ in 0..40 {
-        cpu.do_cycle();
-    }
-    sum = sum + cpu.cycle * cpu.reg_x;
-
-    for _ in 0..40 {
-        cpu.do_cycle();
-    }
-    sum = sum + cpu.cycle * cpu.reg_x;
-
-    for _ in 0..40 {
-        cpu.do_cycle();
-    }
-    sum = sum + cpu.cycle * cpu.reg_x;
-
-    for _ in 0..40 {
-        cpu.do_cycle();
-    }
-    sum = sum + cpu.cycle * cpu.reg_x;
     println!("Solution part1: {}", sum);
 
     return sum;
@@ -117,7 +95,7 @@ fn part_one() -> i32 {
 fn part_two() {
     let commands = parse_input("input");
     let mut cpu = CPU::new(commands);
-    for _ in 1..240 {
+    for _ in 0..240 {
         cpu.do_cycle();
     }
     cpu.draw();
