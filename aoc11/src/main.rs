@@ -1,69 +1,87 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
+use std::str::SplitWhitespace;
+use std::cell::RefCell;
 
-struct CPU {
-    reg_x: i32,
-    cycle: i32,
-    command_stack: Vec<Command>,
-    bussy: bool,
-    pixels: Vec<char>,
+struct Monkey {
+    items: Vec<i64>,
+    item_operation: (Operation, Option<i64>),
+    test: i64,
+    test_true: usize,
+    test_false: usize,
+    inspections: i64
 }
 
-impl CPU {
-    fn new(commands: Vec<Command>) -> CPU {
-        let pixels: Vec<char> = vec!{'.'; (6 * 40) as usize};
-        CPU {cycle: 1, reg_x: 1, command_stack: commands, bussy: false, pixels}
-    }
-
-    fn execute_add(&mut self) {
-        self.bussy = false;
-        let the_command = self.command_stack.remove(0);
-        match the_command {
-            Command::Addx(amount) => self.reg_x += amount,
-            _ => panic!("No add command")
-        }
-    }
-
-    fn _draw(&mut self) {
-        let index = self.cycle -1;
-        let compareable_index = index % 40;
-        if compareable_index >= self.reg_x - 1 && compareable_index <= self.reg_x + 1 {
-            self.pixels[index as usize] = '#';
-        }
-    }
-
-    fn draw(&self) {
-        for line in self.pixels.chunks(40) {
-            let stringline: Vec<&char> = line.iter().collect();
-            let stringline: String = stringline.into_iter().collect();
-            println!("{}", stringline);
-        }
-    }
-
-    fn execute_next_command(&mut self) {
-        let next_cmd = &self.command_stack[0];
-        match next_cmd {
-            Command::Addx(_) => {
-                self.bussy = true;
-            },
-            Command::Noop() => {
-                self.command_stack.remove(0);
+impl Monkey {
+    fn new(parts: &mut Vec<Part>) -> Monkey {
+        let mut items = Vec::new();
+        let mut item_operation = (Operation::Add, None);
+        let mut test = 0;
+        let mut test_true = 0;
+        let mut test_false = 0;
+        let inspections = 0;
+        loop {
+            if parts.is_empty() {
+                break;
             }
-        };
+            let part = parts.remove(0);
+            match part {
+                Part::StartItem(item) => items.push(item),
+                Part::Operation(op) => item_operation = op,
+                Part::Test(cond) => test = cond,
+                Part::TestTrue(target) => test_true = target,
+                Part::TestFalse(target) => test_false = target,
+                Part::Monkey => break
+            };
+
+        }
+        Monkey {items, item_operation, test, test_true, test_false, inspections}
     }
 
-    fn do_cycle (&mut self) -> (i32, i32) {
-        self._draw();
-        if self.bussy {
-            self.execute_add();
+    fn receive_item(&mut self, item: i64) {
+        self.items.push(item);
+    }
+
+    fn inspect_item(&self, item: i64) -> (i64, usize) {
+        let  param = match self.item_operation.1 {
+            Some(x) => x,
+            None => item
+        };
+        let new_item = match self.item_operation.0 {
+            Operation::Add => (item + param) / 3,
+            Operation::Mult => (item * param) / 3
+        };
+
+        if new_item % self.test == 0 {
+            return (new_item, self.test_true);
         } else {
-            self.execute_next_command();
+            return (new_item, self.test_false);
+        }
+    }
+
+    fn throw_item(item: i64, reveiver: usize, monkeys: &Vec<RefCell<Monkey>>) {
+        monkeys[reveiver].borrow_mut().receive_item(item);
+    }
+
+    fn do_monkey_business(&mut self, monkeys: &Vec<RefCell<Monkey>>) {
+        while !self.items.is_empty() {
+            let item = self.items.remove(0);
+            self.inspections += 1;
+            let (item, receiver) = self.inspect_item(item);
+            Self::throw_item(item, receiver, monkeys);
         }
 
-        self.cycle += 1;
-        return (self.reg_x, self.cycle);
     }
+}
+
+fn build_monkeys(parts: &mut Vec<Part>) -> Vec<RefCell<Monkey>> {
+    parts.remove(0);
+    let mut result = Vec::new();
+    while !parts.is_empty() {
+        result.push(RefCell::new(Monkey::new(parts)));
+    }
+    return result;
 }
 
 fn main() {
@@ -71,54 +89,117 @@ fn main() {
     part_two();
 }
 
-fn part_one() -> i32 {
-    let commands = parse_input("input");
-    let mut cpu = CPU::new(commands);
-    let mut sum = 0;
-    for _ in 1..20 {
-        cpu.do_cycle();
+fn monkey_business(monkeys: &Vec<RefCell<Monkey>>) -> i64 {
+    let mut scores = Vec::new();
+    for monkey in monkeys {
+        scores.push(monkey.borrow().inspections);
     }
-    sum = sum + cpu.cycle * cpu.reg_x;
+    scores.sort();
+    scores.reverse();
+    println!("scores: {:?}", scores);
+    return scores[0] * scores[1];
+}
 
-    for _ in 0..5 {
-        for _ in 0..40 {
-            cpu.do_cycle();
+fn part_one() -> i64 {
+    let mut input = parse_input("input");
+    let monkeys = build_monkeys(&mut input);
+    for _ in 0..20 {
+        for i in 0..monkeys.len() {
+            monkeys[i].borrow_mut().do_monkey_business(&monkeys);
         }
-        sum = sum + cpu.cycle * cpu.reg_x;
     }
-
-    println!("Solution part1: {}", sum);
-
-    return sum;
+    let solution = monkey_business(&monkeys);
+    println!("Solution part1: {}", solution);
+    return solution;
 }
 
 fn part_two() {
-    let commands = parse_input("input");
-    let mut cpu = CPU::new(commands);
-    for _ in 0..240 {
-        cpu.do_cycle();
+}
+
+enum Part {
+    StartItem(i64),
+    Operation((Operation, Option<i64>)),
+    Test(i64),
+    TestTrue(usize),
+    TestFalse(usize),
+    Monkey
+}
+
+enum Operation {
+    Add,
+    Mult,
+}
+
+fn parse_starting_items(tokens: &mut SplitWhitespace) -> Vec<Part> {
+    let mut result = Vec::new();
+    let second = tokens.nth(0).unwrap();
+    assert_eq!(second, "items:");
+
+    for number in tokens {
+        let number = String::from(number);
+        let number = number.trim_end_matches(',');
+        let number = number.parse::<i64>().unwrap();
+        result.push(Part::StartItem(number));
     }
-    cpu.draw();
+    return result;
 }
 
-enum Command {
-    Noop(),
-    Addx(i32)
+fn parse_operation(tokens: &mut SplitWhitespace) -> Part {
+    let second = tokens.nth(0).unwrap();
+    assert_eq!(second, "new");
+    tokens.nth(1);
+    let operator = tokens.nth(0).unwrap();
+    let operator = operator.chars().nth(0).unwrap();
+    let operator = match operator {
+        '*' => Operation::Mult,
+        '+' => Operation::Add,
+        _ => panic!("Can not be here")
+    };
+    let parameter = tokens.nth(0).unwrap();
+    let parameter = parameter.parse::<i64>();
+    if parameter.is_ok() {
+        return Part::Operation((operator, Some(parameter.unwrap())));
+    } else {
+        return Part::Operation((operator, None));
+    }
 }
 
-fn parse_input(filename: &str) -> Vec<Command> {
+fn parse_test(tokens: &mut SplitWhitespace) -> Part {
+    let second = tokens.nth(0).unwrap();
+    assert_eq!(second, "divisible");
+    tokens.nth(0);
+    let divisor = tokens.nth(0).unwrap().parse::<i64>().unwrap();
+    return Part::Test(divisor);
+}
+
+fn parse_if(tokens: &mut SplitWhitespace) -> Part {
+    let which = tokens.nth(0).unwrap();
+    tokens.nth(2); //throw to monkey
+    let monkey =tokens.nth(0).unwrap().parse::<usize>().unwrap();
+    match which {
+        "true:" => Part::TestTrue(monkey),
+        "false:" => Part::TestFalse(monkey),
+        _ => panic!("Should not be here")
+    }
+}
+
+fn parse_input(filename: &str) -> Vec<Part> {
     let mut result = Vec::new();
     for line in read_lines(filename).unwrap() {
         if let Ok(linedata) = line {
+            if linedata == "" {
+                continue;
+            }
             let mut tokens = linedata.split_whitespace();
-            let command_type = tokens.nth(0).unwrap();
-            let parameter = tokens.nth(0);
-            let command = match command_type {
-                "addx" => Command::Addx(parameter.unwrap().parse::<i32>().unwrap()),
-                "noop" => Command::Noop(),
-                _ => panic!("Unknown command")
+            let first_token = tokens.nth(0).unwrap();
+            match first_token {
+                "Starting" => result.append(&mut parse_starting_items(&mut tokens)),
+                "Operation:" => result.push(parse_operation(&mut tokens)),
+                "Test:" => result.push(parse_test(&mut tokens)),
+                "If" => result.push(parse_if(&mut tokens)),
+                "Monkey" => result.push(Part::Monkey),
+                _ => panic!("Should not be here: {}", linedata)
             };
-            result.push(command);
         }
     }
     return result;
@@ -137,75 +218,9 @@ mod tests {
 
     #[test]
     fn simple() {
-        let mut commands = Vec::new();
-        commands.push(Command::Noop());
-        commands.push(Command::Addx(3));
-        commands.push(Command::Addx(-5));
-        let mut cpu = CPU::new(commands);
-        let (reg, cycle) = cpu.do_cycle();
-        assert_eq!(cycle, 2);
-        assert_eq!(reg, 1);
-        let (reg, cycle) = cpu.do_cycle();
-        assert_eq!(cycle, 3);
-        assert_eq!(reg, 1);
-        let (reg, cycle) = cpu.do_cycle();
-        assert_eq!(cycle, 4);
-        assert_eq!(reg, 4);
-        let (reg, cycle) = cpu.do_cycle();
-        assert_eq!(cycle, 5);
-        assert_eq!(reg, 4);
-        let (reg, cycle) = cpu.do_cycle();
-        assert_eq!(cycle, 6);
-        assert_eq!(reg, -1);
     }
 
     #[test]
     fn complex() {
-        let commands = parse_input("test_input");
-        let mut cpu = CPU::new(commands);
-        let mut sum = 0;
-        for _ in 1..20 {
-            cpu.do_cycle();
-        }
-        sum = sum + cpu.cycle * cpu.reg_x;
-        assert_eq!(cpu.cycle, 20);
-        assert_eq!(cpu.reg_x, 21);
-
-        for _ in 0..40 {
-            cpu.do_cycle();
-        }
-        sum = sum + cpu.cycle * cpu.reg_x;
-        assert_eq!(cpu.cycle, 60);
-        assert_eq!(cpu.reg_x, 19);
-
-        for _ in 0..40 {
-            cpu.do_cycle();
-        }
-        sum = sum + cpu.cycle * cpu.reg_x;
-        assert_eq!(cpu.cycle, 100);
-        assert_eq!(cpu.reg_x, 18);
-
-        for _ in 0..40 {
-            cpu.do_cycle();
-        }
-        sum = sum + cpu.cycle * cpu.reg_x;
-        assert_eq!(cpu.cycle, 140);
-        assert_eq!(cpu.reg_x, 21);
-
-        for _ in 0..40 {
-            cpu.do_cycle();
-        }
-        sum = sum + cpu.cycle * cpu.reg_x;
-        assert_eq!(cpu.cycle, 180);
-        assert_eq!(cpu.reg_x, 16);
-
-        for _ in 0..40 {
-            cpu.do_cycle();
-        }
-        sum = sum + cpu.cycle * cpu.reg_x;
-        assert_eq!(cpu.cycle, 220);
-        assert_eq!(cpu.reg_x, 18);
-
-        assert_eq!(sum, 13140);
     }
 }
