@@ -10,7 +10,9 @@ struct Monkey {
     test: i64,
     test_true: usize,
     test_false: usize,
-    inspections: i64
+    inspections: i64,
+    devisor: i64,
+    modul: Option<i64>
 }
 
 impl Monkey {
@@ -21,6 +23,8 @@ impl Monkey {
         let mut test_true = 0;
         let mut test_false = 0;
         let inspections = 0;
+        let devisor = 3;
+        let modul = None;
         loop {
             if parts.is_empty() {
                 break;
@@ -36,7 +40,7 @@ impl Monkey {
             };
 
         }
-        Monkey {items, item_operation, test, test_true, test_false, inspections}
+        Monkey {items, item_operation, test, test_true, test_false, inspections, devisor, modul}
     }
 
     fn receive_item(&mut self, item: i64) {
@@ -48,10 +52,14 @@ impl Monkey {
             Some(x) => x,
             None => item
         };
-        let new_item = match self.item_operation.0 {
-            Operation::Add => (item + param) / 3,
-            Operation::Mult => (item * param) / 3
+        let mut new_item = match self.item_operation.0 {
+            Operation::Add => (item + param) / self.devisor,
+            Operation::Mult => (item * param) / self.devisor,
         };
+
+        if self.modul.is_some() {
+            new_item = new_item % self.modul.unwrap();
+        }
 
         if new_item % self.test == 0 {
             return (new_item, self.test_true);
@@ -96,7 +104,6 @@ fn monkey_business(monkeys: &Vec<RefCell<Monkey>>) -> i64 {
     }
     scores.sort();
     scores.reverse();
-    println!("scores: {:?}", scores);
     return scores[0] * scores[1];
 }
 
@@ -113,7 +120,30 @@ fn part_one() -> i64 {
     return solution;
 }
 
-fn part_two() {
+fn calculate_end_set_common_modul(monkeys: &Vec<RefCell<Monkey>>) {
+    let mut common_modul = 1;
+    for monkey in monkeys {
+        common_modul *= monkey.borrow().test;
+    }
+
+    for monkey in monkeys {
+        monkey.borrow_mut().devisor = 1;
+        monkey.borrow_mut().modul = Some(common_modul);
+    }
+}
+
+fn part_two() -> i64{
+    let mut input = parse_input("input");
+    let monkeys = build_monkeys(&mut input);
+    calculate_end_set_common_modul(&monkeys);
+    for _ in 0..10000 {
+        for i in 0..monkeys.len() {
+            monkeys[i].borrow_mut().do_monkey_business(&monkeys);
+        }
+    }
+    let solution = monkey_business(&monkeys);
+    println!("Solution part2: {}", solution);
+    return solution;
 }
 
 enum Part {
