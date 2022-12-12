@@ -8,11 +8,11 @@ struct Monkey {
     items: Vec<i64>,
     item_operation: (Operation, Option<i64>),
     test: i64,
-    test_true: usize,
-    test_false: usize,
+    test_true_target: usize,
+    test_false_target: usize,
     inspections: i64,
     devisor: i64,
-    modul: Option<i64>
+    modulo_devisor: Option<i64>
 }
 
 impl Monkey {
@@ -40,11 +40,18 @@ impl Monkey {
             };
 
         }
-        Monkey {items, item_operation, test, test_true, test_false, inspections, devisor, modul}
+        Monkey {items, item_operation, test, test_true_target: test_true, test_false_target: test_false, inspections, devisor, modulo_devisor: modul}
     }
 
     fn receive_item(&mut self, item: i64) {
         self.items.push(item);
+    }
+
+    fn optimize_item(&self, item: i64) -> i64 {
+        if self.modulo_devisor.is_some() {
+            return item % self.modulo_devisor.unwrap();
+        }
+        return item
     }
 
     fn inspect_item(&self, item: i64) -> (i64, usize) {
@@ -57,14 +64,12 @@ impl Monkey {
             Operation::Mult => (item * param) / self.devisor,
         };
 
-        if self.modul.is_some() {
-            new_item = new_item % self.modul.unwrap();
-        }
+        new_item = self.optimize_item(new_item);
 
         if new_item % self.test == 0 {
-            return (new_item, self.test_true);
+            return (new_item, self.test_true_target);
         } else {
-            return (new_item, self.test_false);
+            return (new_item, self.test_false_target);
         }
     }
 
@@ -128,7 +133,7 @@ fn calculate_end_set_common_modul(monkeys: &Vec<RefCell<Monkey>>) {
 
     for monkey in monkeys {
         monkey.borrow_mut().devisor = 1;
-        monkey.borrow_mut().modul = Some(common_modul);
+        monkey.borrow_mut().modulo_devisor = Some(common_modul);
     }
 }
 
@@ -247,10 +252,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn simple() {
+    fn part_one_test() {
+        let solution = part_one();
+        assert_eq!(solution, 55216);
     }
 
     #[test]
-    fn complex() {
+    fn part_two_test() {
+        let solution = part_two();
+        assert_eq!(solution, 12848882750);
     }
 }
