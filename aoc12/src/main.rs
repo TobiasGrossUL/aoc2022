@@ -118,11 +118,8 @@ impl Map {
     fn _walk_reverse(&mut self, steps: usize, position: &(usize, usize), max_steps: usize) -> (bool, usize) {
         let mut local_max_steps = max_steps;
         // check if we hit target
-        if position == &self.start {
-            return (true, steps);
-        }
 
-        if position == &self.start {
+        if self.grid[position.0][position.1] ==  0 {
             return (true, steps);
         }
 
