@@ -6,67 +6,58 @@ use std::io::{self, BufRead};
 use std::path::Path;
 use std::rc::Weak;
 
-
 fn main() {
     part_one();
     part_two();
 }
+
+fn compare_items(left: &i64, right: &i64) -> Option<bool> {
+    if left < right {
+        return Some(true);
+    } else if right < left {
+        return Some(false);
+    } else {
+        return None;
+    }
+}
+
+fn compare_lists(left: &Vec<Packet>, right: &Vec<Packet>) -> Option<bool> {
+    for (left, right) in left.iter().zip(right.iter()) {
+        let result = is_right_order(left, right);
+        if result.is_some() {
+            return result;
+        }
+    }
+    return None;
+}
+
 fn is_right_order(left: &Packet, right: &Packet) -> Option<bool> {
     match (left, right) {
-        (Packet::Item(left), Packet::Item(right)) => {
-            if left < right {
-                return Some(true);
-            } else if right < left {
-                return Some(false);
-            } else {
-                return None;
-            }
-        },
+        (Packet::Item(left), Packet::Item(right)) => return compare_items(left, right),
         (Packet::List(left), Packet::List(right)) => {
-            for (left, right) in left.iter().zip(right.iter()) {
-                let result = is_right_order(left, right);
-                if result.is_some() {
-                    return result;
-                }
-            }
-            if left.len() < right.len() {
-                return Some(true);
-            } else if right.len() < left.len() {
-                return Some(false);
+            let result = compare_lists(left, right);
+            if result.is_some() {
+                return result;
             } else {
-                return None;
+                return compare_items(&(left.len() as i64), &(right.len() as i64));
             }
         }
         (Packet::Item(left), Packet::List(right)) => {
             let left = vec![Packet::Item(*left)];
-            for (left, right) in left.iter().zip(right.iter()) {
-                let result = is_right_order(left, right);
-                if result.is_some() {
-                    return result;
-                }
-            }
-            if left.len() < right.len() {
-                return Some(true);
-            } else if right.len() < left.len() {
-                return Some(false);
+            let result = compare_lists(&left, right);
+            if result.is_some() {
+                return result;
             } else {
-                return None;
+                return compare_items(&(left.len() as i64), &(right.len() as i64));
             }
         },
         (Packet::List(left), Packet::Item(right)) => {
             let right = vec![Packet::Item(*right)];
-            for (left, right) in left.iter().zip(right.iter()) {
-                let result = is_right_order(left, right);
-                if result.is_some() {
-                    return result;
-                }
-            }
-            if left.len() < right.len() {
-                return Some(true);
-            } else if right.len() < left.len() {
-                return Some(false);
+            let result = compare_lists(left, &right);
+            if result.is_some() {
+                return result;
             } else {
-                return None;
+                return compare_items(&(left.len() as i64), &(right.len() as i64));
             }
         },
     }
@@ -84,12 +75,14 @@ fn part_one() -> usize {
     return sum;
 }
 
-fn compare(left: &Packet, right: &Packet) -> Ordering {
-    let result = is_right_order(left, right).unwrap();
-    if result {
-        return Ordering::Less;
-    } else {
-        return Ordering::Greater;
+impl PartialOrd for Packet {
+    fn partial_cmp(&self, other: &Self) ->Option<Ordering> {
+        let result = is_right_order(self, other).unwrap();
+        if result {
+            return Some(Ordering::Less);
+        } else {
+            return Some(Ordering::Greater);
+        }
     }
 }
 
@@ -105,7 +98,7 @@ fn part_two() -> usize {
     let p2 = Packet::List(vec![Packet::List(vec![Packet::Item(6)])]);
     all_packets.push(&p1);
     all_packets.push(&p2);
-    all_packets.sort_by(|a, b| compare(a, b));
+    all_packets.sort();
 
     let mut solution = 1;
     for (i, packet) in all_packets.iter().enumerate() {
@@ -121,7 +114,7 @@ fn part_two() -> usize {
     return solution;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Ord)]
 enum Packet {
     List(Vec<Packet>),
     Item(i64)
