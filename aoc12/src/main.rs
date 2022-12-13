@@ -7,20 +7,27 @@ struct Map {
     start: (usize, usize),
     end: (usize, usize),
     grid: Vec<Vec<u32>>,
-    max_steps: usize,
-    visited: HashMap<(usize, usize), usize>
+    visited: HashMap<(usize, usize), usize>,
+    finish_on_a: bool
 }
 
 impl Map {
     fn new(start: (usize, usize), end: (usize, usize), grid: Vec<Vec<u32>>) -> Map {
-        let max_steps = grid.len() * grid[0].len();
         let visited = HashMap::new();
-        Map {start, end, grid, max_steps, visited}
+        Map {start, end, grid, visited, finish_on_a: false}
     }
 
-    fn _possible_steps(&self, current: (usize, usize)) -> Vec<(usize, usize)> {
+    fn _reverse_steps(&self, current: &(usize, usize)) -> Vec<(usize, usize)> {
         let mut result = Vec::new();
-        let max_elevation = self.grid[current.0][current.1] + 1;
+
+        let min_elevation = self.grid[current.0][current.1] as i64 - 1;
+        let min_elevation = if min_elevation >= 0 {
+            min_elevation as u32
+        } else {
+            0
+        };
+
+        // four directions
         if current.0 > 0 {
             result.push((current.0 -1, current.1));
         }
@@ -36,162 +43,79 @@ impl Map {
             result.push((current.0, current.1 +1));
         }
 
-        return result.iter().filter(|x| self.grid[x.0][x.1] <= max_elevation).copied().collect();
-    }
-
-    // returns true if target is reached and amount of steps required
-    fn _walk(&mut self, steps: usize, position: (usize, usize)) -> (bool, usize) {
-        // check if we hit target
-        if position == self.end {
-            return (true, steps);
-        }
-
-        // check if we exceed max steps
-        if steps >= self.max_steps {
-            return (false, 0);
-        }
-
-        if self.visited.contains_key(&position){
-            if self.visited.get(&position).unwrap() > &steps {
-                self.visited.insert(position, steps);
-            } else {
-                return (false, 0);
-            }
-        } else {
-            self.visited.insert(position, steps);
-        }
-
-        let next_positions = self._possible_steps(position);
-
-        let mut steps_to_finish = None;
-        for next_pos in next_positions {
-            let (reached, variant_steps) = self._walk(steps + 1, next_pos);
-            if reached {
-                if steps_to_finish.is_none() {
-                    steps_to_finish = Some(variant_steps);
-                } else {
-                    if steps_to_finish.unwrap() > variant_steps {
-                        steps_to_finish = Some(variant_steps);
-                    }
-                }
-            }
-        }
-
-        if steps_to_finish.is_some() {
-            return (true, steps_to_finish.unwrap());
-        } else {
-            return (false,0);
-        }
-    }
-
-    fn _best_reverse_steps(&self, current: &(usize, usize)) -> Vec<(usize, usize)> {
-        let mut result = Vec::new();
-        let min_elevation;
-        if self.grid[current.0][current.1] == 0 {
-            min_elevation = self.grid[current.0][current.1];
-        } else {
-            min_elevation = self.grid[current.0][current.1] - 1;
-        }
-
-        if current.0 > 0 {
-            result.push((current.0 -1, current.1));
-        }
-        if current.1 > 0 {
-            result.push((current.0, current.1 -1));
-        }
-
-        if current.0 < self.grid.len() - 1 {
-            result.push((current.0 +1, current.1));
-        }
-
-        if current.1 < self.grid[0].len() - 1 {
-            result.push((current.0, current.1 +1));
-        }
-
-        result = result.iter().filter(|x| {
-            self.grid[x.0][x.1] >= min_elevation
-        }).copied().collect();
+        // filter only legit targets
+        result = result.iter().filter(|x| self.grid[x.0][x.1] >= min_elevation).copied().collect();
         return result;
     }
 
-    // returns true if target is reached and amount of steps required
-    fn _walk_reverse(&mut self, steps: usize, position: &(usize, usize), max_steps: usize) -> (bool, usize) {
-        let mut local_max_steps = max_steps;
-        // check if we hit target
+    fn _check_target_reached(&self, position: &(usize, usize)) -> bool {
+        if self.finish_on_a {
+            return self.grid[position.0][position.1] == 0;
+        } else {
+            return position == &self.start;
+        }
+    }
 
-        if self.grid[position.0][position.1] ==  0 {
+    fn _check_allready_visited(&mut self, position: &(usize, usize), step: usize) -> bool {
+        if self.visited.contains_key(&position) && self.visited.get(&position).unwrap() <= &step {
+                return true;
+        } else {
+            self.visited.insert(position.clone(), step);
+            return false;
+        }
+    }
+
+    // returns true if target is reached and amount of steps required
+    fn _walk_reverse(&mut self, steps: usize, position: &(usize, usize)) -> (bool, usize) {
+        // check if we hit target
+        if self._check_target_reached(position) {
             return (true, steps);
         }
 
-        // check if we exceed max steps
-        if steps >= max_steps {
+        if self._check_allready_visited(position, steps) {
             return (false, 0);
         }
 
-        if self.visited.contains_key(&position){
-            if self.visited.get(&position).unwrap() > &steps {
-                self.visited.insert(position.clone(), steps);
-            } else {
-                return (false, 0);
-            }
-        } else {
-            self.visited.insert(position.clone(), steps);
-        }
+        let next_positions = self._reverse_steps(position);
 
-        let next_positions = self._best_reverse_steps(position);
-
-        let mut steps_to_finish = None;
+        let mut min_steps = std::usize::MAX;
         for next_pos in next_positions {
-            let (reached, variant_steps) = self._walk_reverse(steps + 1, &next_pos, local_max_steps);
-            if reached {
-                local_max_steps = variant_steps;
-                if steps_to_finish.is_none() {
-                    steps_to_finish = Some(variant_steps);
-                } else {
-                    if steps_to_finish.unwrap() > variant_steps {
-                        steps_to_finish = Some(variant_steps);
-                    }
-                }
+            let (reached, variant_steps) = self._walk_reverse(steps + 1, &next_pos);
+            if reached  && variant_steps < min_steps {
+                min_steps =  variant_steps;
             }
         }
 
-        if steps_to_finish.is_some() {
-            return (true, steps_to_finish.unwrap());
+        if min_steps < std::usize::MAX {
+            return (true, min_steps);
         } else {
             return (false,0);
         }
     }
 
     fn start_walking(&mut self) -> usize {
-        //return self._walk(0, self.start).1;
-        return self._walk_reverse(0, &self.end.clone(), self.max_steps).1;
+        return self._walk_reverse(0, &self.end.clone()).1;
     }
 }
 
 fn main() {
-    test();
     part_one();
     part_two();
 }
 
-fn test() -> usize {
-    let mut map = parse_input("test_input");
-    println!("Max Steps: {}", map.max_steps);
-    let result = map.start_walking();
-    println!("Solution test: {}", result);
-    return result;
-}
-
 fn part_one() -> usize {
     let mut map = parse_input("input");
-    println!("Max Steps: {}", map.max_steps);
     let result = map.start_walking();
     println!("Solution part1: {}", result);
     return result;
 }
 
-fn part_two() -> i64{
-    return 0;
+fn part_two() -> usize {
+    let mut map = parse_input("input");
+    map.finish_on_a = true;
+    let result = map.start_walking();
+    println!("Solution part2: {}", result);
+    return result;
 }
 
 fn parse_input(filename: &str) -> Map {
@@ -227,25 +151,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_possible_steps() {
-        let map = parse_input("test_input");
-        let psteps = map._possible_steps((0,0));
-        assert_eq!(psteps.len(), 2);
-
-        let ele = map.grid[1][2];
-        assert_eq!(ele, 2);
-
-        let psteps = map._possible_steps((1,2));
-        assert_eq!(psteps.len(), 3);
-
-        let psteps = map._possible_steps((2,5));
-        assert_eq!(psteps.len(), 4);
-    }
-
-    #[test]
     fn test_input() {
         let mut map = parse_input("test_input");
-        map.max_steps = 35;
         let result = map.start_walking();
         assert_eq!(result, 31);
     }
@@ -263,13 +170,13 @@ mod tests {
 
     #[test]
     fn part_one_test() {
-        //let solution = part_one();
-        //assert_eq!(solution, 55216);
+        let solution = part_one();
+        assert_eq!(solution, 517);
     }
 
     #[test]
     fn part_two_test() {
-        //let solution = part_two();
-        //assert_eq!(solution, 12848882750);
+        let solution = part_two();
+        assert_eq!(solution, 512);
     }
 }
