@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::rc::Rc;
 use std::fs::File;
 use std::io::{self, BufRead};
@@ -83,13 +84,44 @@ fn part_one() -> usize {
     return sum;
 }
 
-fn part_two() -> usize {
-    let result = 0;
-    println!("Solution part2: {}", result);
-    return result;
+fn compare(left: &Packet, right: &Packet) -> Ordering {
+    let result = is_right_order(left, right).unwrap();
+    if result {
+        return Ordering::Less;
+    } else {
+        return Ordering::Greater;
+    }
 }
 
-#[derive(Debug)]
+fn part_two() -> usize {
+    let input = parse_input("input");
+    let mut all_packets = Vec::new();
+
+    for (left, right) in input.iter() {
+        all_packets.push(left);
+        all_packets.push(right);
+    }
+    let p1 = Packet::List(vec![Packet::List(vec![Packet::Item(2)])]);
+    let p2 = Packet::List(vec![Packet::List(vec![Packet::Item(6)])]);
+    all_packets.push(&p1);
+    all_packets.push(&p2);
+    all_packets.sort_by(|a, b| compare(a, b));
+
+    let mut solution = 1;
+    for (i, packet) in all_packets.iter().enumerate() {
+        if packet == &&p1 {
+            solution *= i + 1;
+        }
+        if packet == &&p2 {
+            solution *= i + 1;
+        }
+    }
+
+    println!("Solution part2: {}", solution);
+    return solution;
+}
+
+#[derive(Debug, PartialEq)]
 enum Packet {
     List(Vec<Packet>),
     Item(i64)
@@ -236,6 +268,9 @@ fn parse_input(filename: &str) -> Vec<(Packet, Packet)> {
             line_storage.push(linepacket);
         }
     }
+    let first = line_storage.remove(0);
+    let second = line_storage.remove(0);
+    result.push((first, second));
     return result;
 }
 
@@ -253,12 +288,20 @@ mod tests {
     #[test]
     fn part_one_test() {
         let solution = part_one();
-        assert_eq!(solution, 0);
+        assert_eq!(solution, 6240);
     }
 
     #[test]
     fn part_two_test() {
         let solution = part_two();
-        assert_eq!(solution, 0);
+        assert_eq!(solution, 23142);
+    }
+
+    #[test]
+    fn compare_packet() {
+        let p1 = Packet::Item(1);
+        let p2 = Packet::Item(1);
+        let result = p1 == p2;
+        assert_eq!(result, true);
     }
 }
