@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
@@ -8,22 +9,20 @@ fn main() {
     part_two();
 }
 
-fn board_size(input: &Vec<Pointline>) -> (usize, usize) {
-    let mut max_x = 0;
+fn max_height(input: &Vec<Pointline>) -> usize {
     let mut max_y = 0;
     for line in input {
         for point in line {
-            max_x = cmp::max(max_x, point.0);
             max_y = cmp::max(max_y, point.1);
         }
     }
-    return (max_x, max_y);
+    return max_y + 1;
 }
 
 fn part_one() -> usize {
     let input = parse_input("input");
-    let (width, height) = board_size(&input);
-    let mut sim = MaterialSimulation::new(width + 1, height + 1);
+    let height = max_height(&input);
+    let mut sim = MaterialSimulation::new(height + 1);
     sim.init_material(&input);
     let result = sim.simulate();
     println!("Solution part 1: {}", result);
@@ -32,11 +31,10 @@ fn part_one() -> usize {
 
 fn part_two() -> usize {
     let mut input = parse_input("input");
-    let (width, height) = board_size(&input);
-    let width = width * 2;
-    let height = height + 3;
-    let mut sim = MaterialSimulation::new(width, height);
-    input.push(vec![(0, height -1),(width -1, height - 1)]);
+    let height = max_height(&input);
+    let height = height + 1;
+    let mut sim = MaterialSimulation::new(height + 1);
+    input.push(vec![(300, height),(700, height)]);
     sim.init_material(&input);
     let result = sim.simulate() + 1;
     println!("Solution part 2: {}", result);
@@ -46,19 +44,18 @@ fn part_two() -> usize {
 #[derive(Clone, PartialEq)]
 enum Material {
     Stone,
-    Air,
     Sand,
 }
 
 struct MaterialSimulation {
-    material: Vec<Vec<Material>>,
+    material: HashMap<Point, Material>,
     start: Point,
     void: usize,
 }
 
 impl MaterialSimulation {
-    fn new(width: usize, height: usize) -> Self {
-        let material = vec![vec![Material::Air; height]; width];
+    fn new(height: usize) -> Self {
+        let material = HashMap::new();
         let start = (500, 0);
         let void = height;
         Self {material, start, void}
@@ -70,14 +67,14 @@ impl MaterialSimulation {
             let from = cmp::min(a.1, b.1);
             let to = cmp::max(a.1, b.1);
             for y in from..=to {
-                self.material[x][y] = Material::Stone;
+                self.material.insert((x, y), Material::Stone);
             }
         } else {
             let y = a.1;
             let from = cmp::min(a.0, b.0);
             let to = cmp::max(a.0, b.0);
             for x in from..=to {
-                self.material[x][y] = Material::Stone;
+                self.material.insert((x, y), Material::Stone);
             }
         }
     }
@@ -91,15 +88,15 @@ impl MaterialSimulation {
     }
 
     fn is_down_free(&self, place: &Point) -> bool {
-        return self.material[place.0][place.1 + 1] == Material::Air;
+        return ! self.material.contains_key(&(place.0, place.1 + 1));
     }
 
     fn is_down_left_free(&self, place: &Point) -> bool {
-        return self.material[place.0-1][place.1 + 1] == Material::Air;
+        return ! self.material.contains_key(&(place.0 - 1, place.1 + 1));
     }
 
     fn is_down_right_free(&self, place: &Point) -> bool {
-        return self.material[place.0+1][place.1 + 1] == Material::Air;
+        return ! self.material.contains_key(&(place.0 + 1, place.1 + 1));
     }
 
     fn drop_sand(&mut self, place: Point) -> bool {
@@ -118,26 +115,27 @@ impl MaterialSimulation {
 
         //nothing free and we reached source
         if place == self.start {
-            self.material[place.0][place.1] = Material::Sand;
+            self.material.insert(place, Material::Sand);
             return false;
         }
 
         //nothing free => manifest_sand
-        self.material[place.0][place.1] = Material::Sand;
+        self.material.insert(place, Material::Sand);
 
         return true;
 
     }
 
-    fn draw(&self) {
-        let min_x = self.material.len() - 60;
-        let max_x = self.material.len();
-        for y in 0..self.material[0].len() {
-            for x in min_x..max_x {
-                match self.material[x][y] {
-                    Material::Air => print!("."),
-                    Material::Stone => print!("#"),
-                    Material::Sand => print!("o"),
+    fn draw(&self, topleft: Point, bottomright: Point) {
+        for y in topleft.1..bottomright.1 {
+            for x in topleft.0..bottomright.0 {
+                if self.material.contains_key(&(x,y)) {
+                    match self.material[&(x, y)] {
+                        Material::Stone => print!("#"),
+                        Material::Sand => print!("o"),
+                    }
+                } else {
+                    print!(".");
                 }
             }
             println!("");
