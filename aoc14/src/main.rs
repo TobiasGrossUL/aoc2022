@@ -1,270 +1,176 @@
-use std::cell::RefCell;
-use std::cmp::Ordering;
-use std::rc::Rc;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
-use std::rc::Weak;
+use std::cmp;
 
 fn main() {
+    part_test();
     part_one();
     part_two();
 }
 
-fn compare_items(left: &i64, right: &i64) -> Option<bool> {
-    if left < right {
-        return Some(true);
-    } else if right < left {
-        return Some(false);
-    } else {
-        return None;
-    }
-}
-
-fn compare_lists(left: &Vec<Packet>, right: &Vec<Packet>) -> Option<bool> {
-    for (left, right) in left.iter().zip(right.iter()) {
-        let result = is_right_order(left, right);
-        if result.is_some() {
-            return result;
+fn max(input: &Vec<Pointline>) -> (usize, usize) {
+    let mut max_x = 0;
+    let mut max_y = 0;
+    for line in input {
+        for point in line {
+            max_x = cmp::max(max_x, point.0);
+            max_y = cmp::max(max_y, point.1);
         }
     }
-    return None;
+    return (max_x, max_y);
 }
 
-fn is_right_order(left: &Packet, right: &Packet) -> Option<bool> {
-    match (left, right) {
-        (Packet::Item(left), Packet::Item(right)) => return compare_items(left, right),
-        (Packet::List(left), Packet::List(right)) => {
-            let result = compare_lists(left, right);
-            if result.is_some() {
-                return result;
-            } else {
-                return compare_items(&(left.len() as i64), &(right.len() as i64));
-            }
-        }
-        (Packet::Item(left), Packet::List(right)) => {
-            let left = vec![Packet::Item(*left)];
-            let result = compare_lists(&left, right);
-            if result.is_some() {
-                return result;
-            } else {
-                return compare_items(&(left.len() as i64), &(right.len() as i64));
-            }
-        },
-        (Packet::List(left), Packet::Item(right)) => {
-            let right = vec![Packet::Item(*right)];
-            let result = compare_lists(left, &right);
-            if result.is_some() {
-                return result;
-            } else {
-                return compare_items(&(left.len() as i64), &(right.len() as i64));
-            }
-        },
-    }
+fn part_test() -> usize {
+    let input = parse_input("test_input");
+    let (width, height) = max(&input);
+    println!("Width: {}, Height: {}", width, height);
+    let mut sim = MaterialSimulation::new(width + 1, height + 1);
+    sim.init_material(&input);
+    let result = sim.simulate();
+    sim.draw();
+    println!("Solution part 1: {}", result);
+    return result;
 }
 
 fn part_one() -> usize {
     let input = parse_input("input");
-    let mut sum = 0;
-    for (i, (left, right)) in input.iter().enumerate() {
-        if is_right_order(&left, &right).unwrap() {
-            sum += i + 1;
-        }
-    }
-    println!("Solution part1: {}", sum);
-    return sum;
-}
-
-impl PartialOrd for Packet {
-    fn partial_cmp(&self, other: &Self) ->Option<Ordering> {
-        let result = is_right_order(self, other).unwrap();
-        if result {
-            return Some(Ordering::Less);
-        } else {
-            return Some(Ordering::Greater);
-        }
-    }
+    let (width, height) = max(&input);
+    let mut sim = MaterialSimulation::new(width + 1, height + 1);
+    sim.init_material(&input);
+    let result = sim.simulate();
+    println!("Solution part 1: {}", result);
+    return result;
 }
 
 fn part_two() -> usize {
-    let input = parse_input("input");
-    let mut all_packets = Vec::new();
-
-    for (left, right) in input.iter() {
-        all_packets.push(left);
-        all_packets.push(right);
-    }
-    let p1 = Packet::List(vec![Packet::List(vec![Packet::Item(2)])]);
-    let p2 = Packet::List(vec![Packet::List(vec![Packet::Item(6)])]);
-    all_packets.push(&p1);
-    all_packets.push(&p2);
-    all_packets.sort();
-
-    let mut solution = 1;
-    for (i, packet) in all_packets.iter().enumerate() {
-        if packet == &&p1 {
-            solution *= i + 1;
-        }
-        if packet == &&p2 {
-            solution *= i + 1;
-        }
-    }
-
-    println!("Solution part2: {}", solution);
-    return solution;
+    return 0;
 }
 
-#[derive(Debug, PartialEq, Eq, Ord)]
-enum Packet {
-    List(Vec<Packet>),
-    Item(i64)
+#[derive(Clone, PartialEq)]
+enum Material {
+    Stone,
+    Air,
+    Sand,
 }
 
-struct AstNode {
-    children: Vec<Rc<RefCell<AstNode>>>,
-    parent: Weak<RefCell<AstNode>>,
-    node_type: Packet,
+struct MaterialSimulation {
+    material: Vec<Vec<Material>>,
+    start: Point,
+    void: usize,
 }
 
-impl AstNode {
-    fn new() -> AstNode {
-        AstNode {children: Vec::new(), parent: Weak::new(), node_type: Packet::List(Vec::new())}
-    }
-}
-
-struct Parser {
-    root: Rc<RefCell<AstNode>>,
-    current_node: Weak<RefCell<AstNode>>,
-}
-
-#[derive(Debug)]
-enum Token {
-    LeftBrace,
-    RightBrace,
-    Number(i64),
-}
-
-impl Parser {
-    fn new() -> Parser {
-        let root = AstNode::new();
-        let rootrc = Rc::new(RefCell::new(root));
-        let current_node =  Rc::downgrade(&rootrc);
-        Parser {root: rootrc, current_node}
+impl MaterialSimulation {
+    fn new(width: usize, height: usize) -> Self {
+        let material = vec![vec![Material::Air; height]; width];
+        let start = (500, 0);
+        let void = height;
+        Self {material, start, void}
     }
 
-    fn _to_number(chars: Vec<char>) -> Token {
-        let number_string: String = chars.into_iter().collect();
-        let number = number_string.parse::<i64>().unwrap();
-        return Token::Number(number);
-    }
-
-    fn _tokenize(char_input: Vec<char>) -> Vec<Token> {
-        let mut result = Vec::new();
-        let mut number_buffer = Vec::new();
-        for char in char_input {
-            match char {
-                '[' => {
-                    result.push(Token::LeftBrace);
-                },
-                ']' => {
-                    if !number_buffer.is_empty() {
-                        result.push(Self::_to_number(number_buffer));
-                        number_buffer = Vec::new();
-                    }
-                    result.push(Token::RightBrace);
-                },
-                ',' => {
-                    if !number_buffer.is_empty() {
-                        result.push(Self::_to_number(number_buffer));
-                        number_buffer = Vec::new();
-                    }
-                },
-                _ => {
-                    number_buffer.push(char);
-                }
+    fn draw_stone(&mut self, a: &Point, b: &Point)  {
+        if a.0 == b.0 {
+            let x = a.0;
+            let from = cmp::min(a.1, b.1);
+            let to = cmp::max(a.1, b.1);
+            for y in from..=to {
+                self.material[x][y] = Material::Stone;
+            }
+        } else {
+            let y = a.1;
+            let from = cmp::min(a.0, b.0);
+            let to = cmp::max(a.0, b.0);
+            for x in from..=to {
+                self.material[x][y] = Material::Stone;
             }
         }
-        return result;
     }
 
-    fn _climb_down(&mut self) {
-        let node_rc = self.current_node.upgrade().unwrap();
-        let mut node_mut = node_rc.borrow_mut();
-        let mut child_node = AstNode::new();
-        child_node.parent = self.current_node.clone();
-        child_node.node_type = Packet::List(Vec::new());
-        node_mut.children.push(Rc::new(RefCell::new(child_node)));
-        self.current_node = Rc::downgrade(&node_mut.children.last().unwrap());
-    }
-
-    fn _climb_up(&mut self) {
-        let node_rc = self.current_node.upgrade().unwrap();
-        let node = node_rc.borrow();
-        self.current_node = node.parent.clone();
-    }
-
-    fn _add_value(&mut self, value: i64) {
-        let node_rc = self.current_node.upgrade().unwrap();
-        let mut node_mut = node_rc.borrow_mut();
-        let mut child_node = AstNode::new();
-        child_node.parent = self.current_node.clone();
-        child_node.node_type = Packet::Item(value);
-        node_mut.children.push(Rc::new(RefCell::new(child_node)));
-    }
-
-    fn _build_packet_struct(current_node: &AstNode) -> Packet {
-        match current_node.node_type {
-            Packet::Item(value) => return Packet::Item(value),
-            Packet::List(_) => {
-                let mut result = Vec::new();
-                for child in current_node.children.iter() {
-                    let p = Self::_build_packet_struct(&child.borrow());
-                    result.push(p);
-                }
-                return Packet::List(result);
-            },
-        }
-    }
-
-    fn parse(&mut self, line: &str) -> Packet {
-        let mut input = Self::_tokenize(line.chars().collect());
-        // delete first array tokens because we have allready created root list
-        input.pop();
-        input.remove(0);
-
-        for token in input.iter() {
-            match token {
-                Token::LeftBrace => self._climb_down(),
-                Token::RightBrace => self._climb_up(),
-                Token::Number(value) => self._add_value(*value),
+    fn init_material(&mut self, pointlines: &Vec<Pointline>) {
+        for line in pointlines {
+            for endpoints in line.windows(2) {
+                self.draw_stone(&endpoints[0], &endpoints[1]);
             }
         }
-        let r = self.root.borrow();
-        return Self::_build_packet_struct(&r);
     }
 
+    fn is_down_free(&self, place: &Point) -> bool {
+        return self.material[place.0][place.1 + 1] == Material::Air;
+    }
+
+    fn is_down_left_free(&self, place: &Point) -> bool {
+        return self.material[place.0-1][place.1 + 1] == Material::Air;
+    }
+
+    fn is_down_right_free(&self, place: &Point) -> bool {
+        return self.material[place.0+1][place.1 + 1] == Material::Air;
+    }
+
+    fn drop_sand(&mut self, place: Point) -> bool {
+        //check if we are allready falling into void
+        if place.1 >= self.void - 1 {
+            return false;
+        }
+
+        if self.is_down_free(&place) {
+            return self.drop_sand((place.0, place.1 + 1));
+        } else if self.is_down_left_free(&place) {
+            return self.drop_sand((place.0-1, place.1 + 1));
+        } else if self.is_down_right_free(&place) {
+            return self.drop_sand((place.0+1, place.1 + 1));
+        }
+
+        //nothing free => manifest_sand
+        self.material[place.0][place.1] = Material::Sand;
+
+        return true;
+
+    }
+
+    fn draw(&self) {
+        let min_x = self.material.len() - 60;
+        let max_x = self.material.len();
+        for y in 0..self.material[0].len() {
+            for x in min_x..max_x {
+                match self.material[x][y] {
+                    Material::Air => print!("."),
+                    Material::Stone => print!("#"),
+                    Material::Sand => print!("o"),
+                }
+            }
+            println!("");
+        }
+    }
+
+    fn simulate(&mut self) -> usize {
+        let mut counter = 0;
+        while self.drop_sand(self.start) {
+            counter += 1;
+        }
+        return counter;
+    }
 }
 
-fn parse_input(filename: &str) -> Vec<(Packet, Packet)> {
-    let mut result = Vec::new();
-    let mut line_storage = Vec::new();
+type Point = (usize, usize);
+type Pointline = Vec<Point>;
+
+fn parse_input(filename: &str) -> Vec<Pointline> {
+    let mut res = Vec::new();
     for line in read_lines(filename).unwrap() {
         if let Ok(linedata) = line {
-            if linedata == "" {
-                let first = line_storage.remove(0);
-                let second = line_storage.remove(0);
-                result.push((first, second));
-                continue;
+            let mut linepoints = Vec::new();
+            let points = linedata.split(" -> ");
+            for point in points {
+                let mut xy = point.split(",");
+                let x = xy.nth(0).unwrap().parse::<usize>().unwrap();
+                let y = xy.nth(0).unwrap().parse::<usize>().unwrap();
+                let point = (x, y);
+                linepoints.push(point);
             }
-            let mut parser = Parser::new();
-            let linepacket = parser.parse(&linedata);
-            line_storage.push(linepacket);
+            res.push(linepoints);
         }
     }
-    let first = line_storage.remove(0);
-    let second = line_storage.remove(0);
-    result.push((first, second));
-    return result;
+    return res;
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
