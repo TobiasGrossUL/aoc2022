@@ -4,7 +4,6 @@ use std::path::Path;
 use std::cmp;
 
 fn main() {
-    part_test();
     part_one();
     part_two();
 }
@@ -22,10 +21,11 @@ fn max(input: &Vec<Pointline>) -> (usize, usize) {
 }
 
 fn part_test() -> usize {
-    let input = parse_input("test_input");
+    let mut input = parse_input("test_input");
     let (width, height) = max(&input);
     println!("Width: {}, Height: {}", width, height);
-    let mut sim = MaterialSimulation::new(width + 1, height + 1);
+    let mut sim = MaterialSimulation::new(width + 30, height + 3);
+    input.push(vec![(0, height + 2),(width +  29, height + 2)]);
     sim.init_material(&input);
     let result = sim.simulate();
     sim.draw();
@@ -44,7 +44,17 @@ fn part_one() -> usize {
 }
 
 fn part_two() -> usize {
-    return 0;
+    let mut input = parse_input("input");
+    let (width, height) = max(&input);
+    let width = width * 2;
+    let height = height +3;
+    let mut sim = MaterialSimulation::new(width, height);
+    input.push(vec![(0, height -1),(width -1, height - 1)]);
+    sim.init_material(&input);
+    let result = sim.simulate();
+    sim.draw();
+    println!("Solution part 1: {}", result);
+    return result;
 }
 
 #[derive(Clone, PartialEq)]
@@ -118,6 +128,12 @@ impl MaterialSimulation {
             return self.drop_sand((place.0-1, place.1 + 1));
         } else if self.is_down_right_free(&place) {
             return self.drop_sand((place.0+1, place.1 + 1));
+        }
+
+        //nothing free and we reached source
+        if place == self.start {
+            self.material[place.0][place.1] = Material::Sand;
+            return false;
         }
 
         //nothing free => manifest_sand
