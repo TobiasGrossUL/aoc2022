@@ -8,7 +8,7 @@ fn main() {
     part_two();
 }
 
-fn max(input: &Vec<Pointline>) -> (usize, usize) {
+fn board_size(input: &Vec<Pointline>) -> (usize, usize) {
     let mut max_x = 0;
     let mut max_y = 0;
     for line in input {
@@ -20,22 +20,9 @@ fn max(input: &Vec<Pointline>) -> (usize, usize) {
     return (max_x, max_y);
 }
 
-fn part_test() -> usize {
-    let mut input = parse_input("test_input");
-    let (width, height) = max(&input);
-    println!("Width: {}, Height: {}", width, height);
-    let mut sim = MaterialSimulation::new(width + 30, height + 3);
-    input.push(vec![(0, height + 2),(width +  29, height + 2)]);
-    sim.init_material(&input);
-    let result = sim.simulate();
-    sim.draw();
-    println!("Solution part 1: {}", result);
-    return result;
-}
-
 fn part_one() -> usize {
     let input = parse_input("input");
-    let (width, height) = max(&input);
+    let (width, height) = board_size(&input);
     let mut sim = MaterialSimulation::new(width + 1, height + 1);
     sim.init_material(&input);
     let result = sim.simulate();
@@ -45,15 +32,14 @@ fn part_one() -> usize {
 
 fn part_two() -> usize {
     let mut input = parse_input("input");
-    let (width, height) = max(&input);
+    let (width, height) = board_size(&input);
     let width = width * 2;
-    let height = height +3;
+    let height = height + 3;
     let mut sim = MaterialSimulation::new(width, height);
     input.push(vec![(0, height -1),(width -1, height - 1)]);
     sim.init_material(&input);
-    let result = sim.simulate();
-    sim.draw();
-    println!("Solution part 1: {}", result);
+    let result = sim.simulate() + 1;
+    println!("Solution part 2: {}", result);
     return result;
 }
 
@@ -203,20 +189,12 @@ mod tests {
     #[test]
     fn part_one_test() {
         let solution = part_one();
-        assert_eq!(solution, 6240);
+        assert_eq!(solution, 888);
     }
 
     #[test]
     fn part_two_test() {
         let solution = part_two();
-        assert_eq!(solution, 23142);
-    }
-
-    #[test]
-    fn compare_packet() {
-        let p1 = Packet::Item(1);
-        let p2 = Packet::Item(1);
-        let result = p1 == p2;
-        assert_eq!(result, true);
+        assert_eq!(solution, 26461);
     }
 }
